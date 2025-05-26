@@ -14,6 +14,9 @@
 namespace Config {
 const char *WIFI_SSID = "Everwood";
 const char *WIFI_PASSWORD = "Everwood-Staff";
+// Board identification
+const char *BOARD_ID = "STAGE_2_001";
+const char *BOARD_DESCRIPTION = "Stage 2 Cutting Controller";
 }  // namespace Config
 
 // Create AsyncWebServer object on port 80
@@ -22,8 +25,8 @@ AsyncWebSocket ws("/ws");  // Keep only dashboard WebSocket
 
 // Create Preferences object
 Preferences preferences;
-//hi my
-// Serial communication settings
+// hi my
+//  Serial communication settings
 const unsigned long SERIAL_BAUDRATE = 115200;
 
 // Pin Configuration - Using ESP32 GPIO pins
@@ -141,7 +144,8 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
 void initWebSockets();  // Updated to initialize both WebSockets
 void initWebSocket();   // Keep for backward compatibility
 void sendBurstRequest();
-void handleSerialResponse();  // New function to handle serial responses
+void handleSerialResponse(
+    const String &response);  // New function to handle serial responses
 void sendSerialMessage(
     const String &message);  // New function to send serial messages
 
@@ -382,7 +386,20 @@ void loop() {
   ws.cleanupClients();
 
   // Handle serial communication
-  handleSerialResponse();
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    if (command.length() > 0) {
+      // Check if this is a JSON command from Python or a plain text command
+      if (command.startsWith("{")) {
+        // Handle JSON commands from Python (like burst responses)
+        handleSerialResponse(command);
+      } else {
+        // Handle plain text commands (manual serial commands)
+        handleSerialCommand(command);
+      }
+    }
+  }
 
   // Update button states
   homeSwitch.update();
@@ -553,8 +570,15 @@ void runCuttingCycle() {
            (millis() - startWaitTime < waitTimeout)) {
       // Update WebSocket clients and handle serial responses more frequently
       ws.cleanupClients();
-      handleSerialResponse();  // Process serial responses during wait
-      delay(10);               // Smaller delay for more responsive checking
+      // Check for and process any available serial responses
+      if (Serial.available()) {
+        String response = Serial.readStringUntil('\n');
+        response.trim();
+        if (response.length() > 0 && response.startsWith("{")) {
+          handleSerialResponse(response);  // Process JSON responses during wait
+        }
+      }
+      delay(10);  // Smaller delay for more responsive checking
     }
 
     // Handle timeout case for inference timing
@@ -769,29 +793,51 @@ void staggeredReleaseClamps() {
 }
 
 void handleSerialCommand(const String &command) {
+  logMessage("Serial command received: " + command);
+  // Check for JSON commands first
+  if (command.startsWith("{")) {
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, command);
+
+    if (!error) {
+      const char *cmd = doc["command"];
+      if (cmd && strcmp(cmd, "identify") == 0) {
+        // Send board identification
+        DynamicJsonDocument response(128);
+        response["board_id"] = Config::BOARD_ID;
+        response["description"] = Config::BOARD_DESCRIPTION;
+        response["type"] = "STAGE_2";
+
+        String jsonResponse;
+        serializeJson(response, jsonResponse);
+        sendSerialMessage(jsonResponse);
+        logMessage("Sent board identification: " + String(Config::BOARD_ID));
+        return;
+      }
+    }
+  }
+
+  // Handle plain text commands
   if (command == "status") {
     printSystemStatus();
   } else if (command == "home") {
-    // Serial.println("🏠 Initiating homing sequence..."); // DO NOT DELETE
     logMessage("🏠 Initiating homing sequence via serial...");
     performHomingSequence();
   } else if (command == "settings") {
     printCurrentSettings();
+  } else if (command == "identify") {
+    // Plain text identification response
+    sendSerialMessage("BOARD_ID:" + String(Config::BOARD_ID));
+    logMessage("Sent board identification (plain text): " +
+               String(Config::BOARD_ID));
   } else if (command == "help") {
-    // Serial.println("\n📚 Available Commands:"); // DO NOT DELETE
-    // Serial.println("- status: Show current system status"); // DO NOT DELETE
-    // Serial.println("- home: Perform homing sequence"); // DO NOT DELETE
-    // Serial.println("- settings: Show current system settings"); // DO NOT
-    // DELETE Serial.println("- help: Show this help message"); // DO NOT DELETE
-    logMessage("\n📚 Available Commands:", "info",
-               true);  // Exclude serial for this log block
+    logMessage("\n📚 Available Commands:", "info", true);
     logMessage("- status: Show current system status", "info", true);
     logMessage("- home: Perform homing sequence", "info", true);
     logMessage("- settings: Show current system settings", "info", true);
+    logMessage("- identify: Send board identification", "info", true);
     logMessage("- help: Show this help message", "info", true);
   } else {
-    // Serial.println("❌ Unknown command. Type 'help' for available
-    // commands."); // DO NOT DELETE
     logMessage("❌ Unknown serial command: " + command +
                    ". Type 'help' for available commands.",
                "warn", true);
@@ -979,126 +1025,113 @@ void sendBurstRequest() {
 }
 
 // Function to handle serial responses
-void handleSerialResponse() {
-  if (Serial.available()) {
-    String response = Serial.readStringUntil('\n');
-    response.trim();
+void handleSerialResponse(const String &response) {
+  // This function handles JSON responses from Python
+  logMessage("Serial response received: " + response, "info",
+             true);  // Exclude from serial to prevent echo
 
-    if (response.length() > 0) {
-      // Check if this is a JSON response (likely from Python)
-      if (response.startsWith("{")) {
-        logMessage("Serial response received: " + response);
+  // Try to parse JSON response
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, response);
 
-        // Try to parse JSON response
-        DynamicJsonDocument doc(512);
-        DeserializationError error = deserializeJson(doc, response);
+  if (!error) {
+    // Handle JSON responses from Python
+    if (doc.containsKey("status")) {
+      String status = doc["status"].as<String>();
+      logMessage("Camera status: " + status);
 
-        if (!error) {
-          // Handle JSON responses from Python
-          if (doc.containsKey("status")) {
-            String status = doc["status"].as<String>();
-            logMessage("Camera status: " + status);
+      if (status == "success" && doc.containsKey("burst_complete")) {
+        String result = doc["burst_complete"].as<String>();
+        logMessage("Camera burst complete with result: " + result);
 
-            if (status == "success" && doc.containsKey("burst_complete")) {
-              String result = doc["burst_complete"].as<String>();
-              logMessage("Camera burst complete with result: " + result);
+        // Check for analysis results
+        if (doc.containsKey("analysis_result")) {
+          // Extract the analysis results
+          JsonObject analysis = doc["analysis_result"];
 
-              // Check for analysis results
-              if (doc.containsKey("analysis_result")) {
-                // Extract the analysis results
-                JsonObject analysis = doc["analysis_result"];
+          if (analysis.containsKey("class")) {
+            String detectedClass = analysis["class"].as<String>();
+            float confidence = 0.0;
 
-                if (analysis.containsKey("class")) {
-                  String detectedClass = analysis["class"].as<String>();
-                  float confidence = 0.0;
-
-                  if (analysis.containsKey("confidence")) {
-                    confidence = analysis["confidence"].as<float>();
-                  }
-
-                  // Calculate inference duration if timing is active
-                  unsigned long inferenceDuration = 0;
-                  if (inferenceTimingActive) {
-                    inferenceDuration = millis() - inferenceStartTime;
-                    inferenceTimingActive = false;
-                  }
-
-                  // Log the detected class
-                  logMessage("======= WOOD ANALYSIS RESULT =======");
-                  logMessage("Detected class: " + detectedClass);
-                  logMessage("Confidence: " + String(confidence * 100) + "%");
-                  if (inferenceDuration > 0) {
-                    logMessage("Inference duration: " +
-                               String(inferenceDuration) + " ms");
-                  }
-                  logMessage("====================================");
-
-                  // Update analysis result tracking
-                  lastDetectedClass = detectedClass;
-                  analysisResultReceived = true;
-                } else if (analysis.containsKey("error")) {
-                  // Handle error in analysis
-                  String errorMsg = analysis["error"].as<String>();
-
-                  // Calculate inference duration if timing is active (even for
-                  // errors)
-                  unsigned long inferenceDuration = 0;
-                  if (inferenceTimingActive) {
-                    inferenceDuration = millis() - inferenceStartTime;
-                    inferenceTimingActive = false;
-                  }
-
-                  logMessage("======= WOOD ANALYSIS ERROR =======", "error");
-                  logMessage("Error: " + errorMsg, "error");
-                  if (inferenceDuration > 0) {
-                    logMessage(
-                        "Time to error: " + String(inferenceDuration) + " ms",
-                        "error");
-                  }
-                  logMessage("===================================", "error");
-
-                  // Reset analysis result tracking on error
-                  lastDetectedClass = "";
-                  analysisResultReceived = false;
-                }
-              }
-            } else if (status == "error" && doc.containsKey("message")) {
-              String errorMsg = doc["message"].as<String>();
-
-              // Calculate inference duration if timing is active (even for
-              // errors)
-              unsigned long inferenceDuration = 0;
-              if (inferenceTimingActive) {
-                inferenceDuration = millis() - inferenceStartTime;
-                inferenceTimingActive = false;
-              }
-
-              logMessage("Camera error: " + errorMsg, "error");
-              if (inferenceDuration > 0) {
-                logMessage(
-                    "Time to error: " + String(inferenceDuration) + " ms",
-                    "error");
-              }
-
-              // Reset analysis result tracking on error
-              lastDetectedClass = "";
-              analysisResultReceived = false;
+            if (analysis.containsKey("confidence")) {
+              confidence = analysis["confidence"].as<float>();
             }
-          }
-        } else {
-          logMessage("JSON parsing error: " + String(error.c_str()), "error");
 
-          // Reset analysis result tracking on error
-          lastDetectedClass = "";
-          analysisResultReceived = false;
+            // Calculate inference duration if timing is active
+            unsigned long inferenceDuration = 0;
+            if (inferenceTimingActive) {
+              inferenceDuration = millis() - inferenceStartTime;
+              inferenceTimingActive = false;
+            }
+
+            // Log the detected class
+            logMessage("======= WOOD ANALYSIS RESULT =======");
+            logMessage("Detected class: " + detectedClass);
+            logMessage("Confidence: " + String(confidence * 100) + "%");
+            if (inferenceDuration > 0) {
+              logMessage("Inference duration: " + String(inferenceDuration) +
+                         " ms");
+            }
+            logMessage("====================================");
+
+            // Update analysis result tracking
+            lastDetectedClass = detectedClass;
+            analysisResultReceived = true;
+          } else if (analysis.containsKey("error")) {
+            // Handle error in analysis
+            String errorMsg = analysis["error"].as<String>();
+
+            // Calculate inference duration if timing is active (even for
+            // errors)
+            unsigned long inferenceDuration = 0;
+            if (inferenceTimingActive) {
+              inferenceDuration = millis() - inferenceStartTime;
+              inferenceTimingActive = false;
+            }
+
+            logMessage("======= WOOD ANALYSIS ERROR =======", "error");
+            logMessage("Error: " + errorMsg, "error");
+            if (inferenceDuration > 0) {
+              logMessage("Time to error: " + String(inferenceDuration) + " ms",
+                         "error");
+            }
+            logMessage("===================================", "error");
+
+            // Reset analysis result tracking on error
+            lastDetectedClass = "";
+            analysisResultReceived = false;
+          }
         }
-      } else {
-        // Handle plain text commands (manual serial commands)
-        logMessage("Serial command received: " + response, "info", true);
-        handleSerialCommand(response);
+      } else if (status == "error" && doc.containsKey("message")) {
+        String errorMsg = doc["message"].as<String>();
+
+        // Calculate inference duration if timing is active (even for
+        // errors)
+        unsigned long inferenceDuration = 0;
+        if (inferenceTimingActive) {
+          inferenceDuration = millis() - inferenceStartTime;
+          inferenceTimingActive = false;
+        }
+
+        logMessage("Camera error: " + errorMsg, "error");
+        if (inferenceDuration > 0) {
+          logMessage("Time to error: " + String(inferenceDuration) + " ms",
+                     "error");
+        }
+
+        // Reset analysis result tracking on error
+        lastDetectedClass = "";
+        analysisResultReceived = false;
       }
     }
+  } else {
+    logMessage("JSON parsing error: " + String(error.c_str()), "error");
+
+    // Reset analysis result tracking on error
+    lastDetectedClass = "";
+    analysisResultReceived = false;
   }
+}
 }
 
 // Function to send serial messages
