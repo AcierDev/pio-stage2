@@ -22,7 +22,7 @@ AsyncWebSocket ws("/ws");  // Keep only dashboard WebSocket
 
 // Create Preferences object
 Preferences preferences;
-//hi
+//hi my name is aykov
 // Serial communication settings
 const unsigned long SERIAL_BAUDRATE = 115200;
 
