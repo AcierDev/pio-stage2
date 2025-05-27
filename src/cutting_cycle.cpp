@@ -96,7 +96,7 @@ void runCuttingCycle() {
       delay(50);
 
       // Force update the debouncer to capture the current state
-      updateMachineStartSignalDebouncer();
+      updateTransferArmStartSignalDebouncer();
 
       logMessage("✅ Cycle short-circuited and completed!");
       return;  // Exit the function early
@@ -248,7 +248,7 @@ void runCuttingCycle() {
   delay(50);  // Small delay to allow signal to stabilize
 
   // Force update the debouncer to capture the current state
-  updateMachineStartSignalDebouncer();
+  updateTransferArmStartSignalDebouncer();
 
   logMessage("✅ Cycle complete!");
 } 

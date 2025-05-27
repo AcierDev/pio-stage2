@@ -54,6 +54,6 @@ void sendBurstRequest();
 void handleSerialResponse(const String &response);
 void sendSerialMessage(const String &message);
 void logMessage(const String &message, const String &level = "info", bool excludeSerial = false);
-void updateMachineStartSignalDebouncer();
+void updateTransferArmStartSignalDebouncer();
 
 #endif // CUTTING_CYCLE_H 

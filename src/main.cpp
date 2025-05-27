@@ -10,15 +10,8 @@
 
 #include "webpage.h"
 #include "cutting_cycle.h"
-
-// WiFi credentials - make these available to the whole program
-namespace Config {
-const char *WIFI_SSID = "Everwood";
-const char *WIFI_PASSWORD = "Everwood-Staff";
-// Board identification
-const char *BOARD_ID = "STAGE_2_001";
-const char *BOARD_DESCRIPTION = "Stage 2 Cutting Controller";
-}  // namespace Config
+#include "Config/system_config.h"
+#include "Config/pin_definitions.h"
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -26,82 +19,12 @@ AsyncWebSocket ws("/ws");  // Keep only dashboard WebSocket
 
 // Create Preferences object
 Preferences preferences;
-// hi my
-//  Serial communication settings
-const unsigned long SERIAL_BAUDRATE = 115200;
-
-// Pin Configuration - Using ESP32 GPIO pins
-namespace Pins {
-// Input pins
-constexpr int HOME_SWITCH = 22;
-constexpr int START_BUTTON = 23;
-constexpr int MACHINE_1TO2_START_SIGNAL =
-    15;                            // Changed from 18 to 5 for Stage 1 signal
-constexpr int CAMERA_SIGNAL = 34;  // New camera signal pin
-
-// Output pins
-constexpr int STEP = 18;
-constexpr int DIR = 5;
-constexpr int ENABLE = 27;
-constexpr int LEFT_CLAMP = 13;
-constexpr int RIGHT_CLAMP = 12;
-constexpr int ALIGN_CYLINDER = 14;
-constexpr int TRANSFER_ARM_SIGNAL = 2;  // Signal to transfer arm to prevent Z-axis lowering during return
-}  // namespace Pins
-
-// Motion Parameters
-namespace Motion {
-constexpr int STEPS_PER_INCH = 43;   // Halved from 63 for the 30:80 tooth ratio
-constexpr float HOME_OFFSET = 1.1;  // Position value stays the same
-constexpr float APPROACH_DISTANCE = 5.0;  // Position value stays the same
-constexpr float CUTTING_DISTANCE = 7.3;   // Position value stays the same
-constexpr float FORWARD_DISTANCE = 29.5;  // Position value stays the same
-constexpr float END_DROP_DISTANCE_OFFSET =
-    5;  // Distance before the forward distance
-
-// Speed Settings (inches/second)
-constexpr float HOMING_SPEED_IPS = 23.4375f;  // 750 steps/sec ÷ 32 steps/inch
-constexpr float APPROACH_SPEED_IPS = 312.5f;  // 10000 steps/sec ÷ 32 steps/inch
-constexpr float CUTTING_SPEED_IPS = 1.96875f;  // 63 steps/sec ÷ 32 steps/inch
-constexpr float FINISH_SPEED_IPS = 390.625f;  // 12500 steps/sec ÷ 32 steps/inch
-constexpr float RETURN_SPEED_IPS = 390.625f;  // 12500 steps/sec ÷ 32 steps/inch
-
-// Speed Settings (steps/second) - For internal use
-constexpr float HOMING_SPEED = HOMING_SPEED_IPS * STEPS_PER_INCH;
-constexpr float APPROACH_SPEED = APPROACH_SPEED_IPS * STEPS_PER_INCH;
-constexpr float CUTTING_SPEED = CUTTING_SPEED_IPS * STEPS_PER_INCH;
-constexpr float FINISH_SPEED = FINISH_SPEED_IPS * STEPS_PER_INCH;
-constexpr float RETURN_SPEED = RETURN_SPEED_IPS * STEPS_PER_INCH;
-
-// Acceleration Settings (inches/second^2)
-constexpr float FORWARD_ACCEL_IPS2 =
-    234.375f;  // 7500 steps/sec^2 ÷ 32 steps/inch
-constexpr float RETURN_ACCEL_IPS2 =
-    234.375f;  // 7500 steps/sec^2 ÷ 32 steps/inch
-
-// Acceleration Settings (steps/second^2) - For internal use
-constexpr float FORWARD_ACCEL = FORWARD_ACCEL_IPS2 * STEPS_PER_INCH;
-constexpr float RETURN_ACCEL = RETURN_ACCEL_IPS2 * STEPS_PER_INCH;
-}  // namespace Motion
 
 // Variable to store the current forward distance
 float currentForwardDistance;  // Will be initialized in setup()
 
 // Variable to store the current home offset
 float currentHomeOffset;  // Will be initialized in setup()
-
-// Timing Settings (milliseconds)
-namespace Timing {
-constexpr int CLAMP_ENGAGE_TIME = 200;
-constexpr int CLAMP_RELEASE_TIME = 200;
-constexpr int HOME_SETTLE_TIME = 30;
-constexpr int MOTION_SETTLE_TIME = 50;
-constexpr int ALIGNMENT_TIME = 300;  // Changed to 300ms for alignment cylinder
-constexpr int LEFT_CLAMP_PULSE_TIME =
-    100;  // New constant for left clamp pulse duration
-constexpr int LEFT_CLAMP_RETRACT_WAIT = 50;
-constexpr int CLAMP_RELEASE_SETTLE_TIME = 100;
-}  // namespace Timing
 
 // System state
 enum class SystemState { INITIALIZING, HOMING, READY, CYCLE_RUNNING, ERROR };
@@ -110,7 +33,7 @@ enum class SystemState { INITIALIZING, HOMING, READY, CYCLE_RUNNING, ERROR };
 AccelStepper stepper(AccelStepper::DRIVER, Pins::STEP, Pins::DIR);
 Bounce homeSwitch = Bounce();
 Bounce startButton = Bounce();
-Bounce machineStartSignal = Bounce();  // Renamed from remoteStart
+Bounce transferArmStartSignal = Bounce();  // Transfer arm start signal
 Bounce cameraSignal = Bounce();        // New debouncer for camera signal
 
 // System state tracking
@@ -158,7 +81,7 @@ void manualToggleLeftClamp();
 void manualToggleRightClamp();
 void manualToggleAlignCylinder();
 void manualStartCycle();
-void updateMachineStartSignalDebouncer();
+void updateTransferArmStartSignalDebouncer();
 
 // Function to send log messages to Serial and WebSocket
 void logMessage(const String &message, const String &level,
@@ -348,7 +271,8 @@ void setup() {
 
   // Load saved home offset or use default if not found
   currentHomeOffset = preferences.getFloat("home_offset", Motion::HOME_OFFSET);
-  logMessage("Loaded home offset: " + String(currentHomeOffset));
+  logMessage("Loaded home offset: " + String(currentHomeOffset) + " inches (from preferences)");
+  logMessage("Default home offset constant: " + String(Motion::HOME_OFFSET) + " inches");
 
   // Connect to Wi-Fi using the namespaced credentials
   WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
@@ -407,7 +331,7 @@ void loop() {
   // Update button states
   homeSwitch.update();
   startButton.update();
-  machineStartSignal.update();
+  transferArmStartSignal.update();
   cameraSignal.update();  // Update camera signal debouncer
 
   // Check for cycle start (either from button or machine start signal)
@@ -416,27 +340,27 @@ void loop() {
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
-    updateMachineStartSignalDebouncer();
+    updateTransferArmStartSignalDebouncer();
     currentState = SystemState::READY;
     logMessage("Cycle from button finished. System Ready.");
   }
 
-  if (machineStartSignal.rose() && currentState == SystemState::READY) {
-    logMessage("Starting cycle from machine start signal...");
+  if (transferArmStartSignal.read() == HIGH && currentState == SystemState::READY) {
+    logMessage("Starting cycle from transfer arm start signal...");
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
-    updateMachineStartSignalDebouncer();
+    updateTransferArmStartSignalDebouncer();
     currentState = SystemState::READY;
-    logMessage("Cycle from machine signal finished. System Ready.");
+    logMessage("Cycle from transfer arm signal finished. System Ready.");
   }
 }
 
 void initializeHardware() {
   // Configure input pins
-  pinMode(Pins::HOME_SWITCH, INPUT_PULLUP);
-  pinMode(Pins::START_BUTTON, INPUT_PULLUP);
-  pinMode(Pins::MACHINE_1TO2_START_SIGNAL, INPUT_PULLUP);  // Pin 5 with pullup
+  pinMode(Pins::HOME_SWITCH, INPUT_PULLDOWN);
+  pinMode(Pins::START_BUTTON, INPUT_PULLDOWN);
+  pinMode(Pins::TRANSFER_ARM_START_SIGNAL, INPUT_PULLDOWN);  // Pin 15
   pinMode(Pins::CAMERA_SIGNAL, INPUT);  // Initialize camera signal pin
 
   // Configure output pins
@@ -461,8 +385,8 @@ void initializeHardware() {
   homeSwitch.interval(10);
   startButton.attach(Pins::START_BUTTON);
   startButton.interval(20);
-  machineStartSignal.attach(Pins::MACHINE_1TO2_START_SIGNAL);
-  machineStartSignal.interval(20);  // Ensure good debouncing for the signal pin
+  transferArmStartSignal.attach(Pins::TRANSFER_ARM_START_SIGNAL);
+  transferArmStartSignal.interval(50);  // 50ms debounce for transfer arm start signal
   cameraSignal.attach(Pins::CAMERA_SIGNAL);
   cameraSignal.interval(20);  // Debounce camera signal
 
@@ -482,6 +406,7 @@ void initializeHardware() {
 void performHomingSequence() {
   // Serial.println("🏠 Starting homing sequence..."); // DO NOT DELETE
   logMessage("🏠 Starting homing sequence...");
+  logMessage("Using home offset: " + String(currentHomeOffset) + " inches");
   currentState = SystemState::HOMING;
 
   // Clamps are already engaged from initialization
@@ -508,8 +433,13 @@ void performHomingSequence() {
 
     if (homeSwitch.read() == HIGH) {
       // When home switch is triggered, stop immediately
-      stepper.setSpeed(0);
       stepper.stop();
+      
+      // Wait for the stepper to actually stop before setting position
+      while (stepper.isRunning()) {
+        stepper.run();
+      }
+      
       stepper.setCurrentPosition(0);
       break;
     }
@@ -525,16 +455,25 @@ void performHomingSequence() {
     return;
   }
 
-  // Now move to home offset with a gentler motion - no delay
-  stepper.setMaxSpeed(Motion::HOMING_SPEED /
-                      2);  // Half speed for moving to offset
+  // Now move to home offset with a gentler motion
+  logMessage("Moving to home offset position: " + String(currentHomeOffset) + " inches");
+  stepper.setMaxSpeed(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
   stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
   moveStepperToPosition(currentHomeOffset, Motion::HOMING_SPEED / 2,
                         Motion::FORWARD_ACCEL / 2);
+  
+  // Add settle time after reaching home offset
+  delay(Timing::HOME_SETTLE_TIME);
+  
+  logMessage("Home offset position reached. Current position: " + 
+             String(stepper.currentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   // Now that we're at home position, release the clamps
   digitalWrite(Pins::LEFT_CLAMP, HIGH);
   digitalWrite(Pins::RIGHT_CLAMP, HIGH);
+  
+  // Add settle time after releasing clamps
+  delay(Timing::CLAMP_RELEASE_TIME);
 
   isHomed = true;
   // Serial.println("✅ Homing complete"); // DO NOT DELETE
@@ -673,12 +612,12 @@ void printSystemStatus() {
   logMessage(
       "Start Button: " + String(startButton.read() ? "PRESSED" : "NOT PRESSED"),
       "info", true);
-  // Serial.print("1-to-2 Machine Start Signal: "); // DO NOT DELETE
-  // Serial.println(machineStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED");
+  // Serial.print("Transfer Arm Start Signal: "); // DO NOT DELETE
+  // Serial.println(transferArmStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED");
   // // DO NOT DELETE
   logMessage(
-      "1-to-2 Machine Start Signal: " +
-          String(machineStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED"),
+      "Transfer Arm Start Signal: " +
+          String(transferArmStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED"),
       "info", true);
   // Serial.print("Camera Signal: "); // DO NOT DELETE
   // Serial.println(cameraSignal.read() ? "READY" : "NOT READY"); // DO NOT
@@ -1023,7 +962,7 @@ void manualStartCycle() {
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
-    updateMachineStartSignalDebouncer();
+    updateTransferArmStartSignalDebouncer();
     currentState = SystemState::READY;
     logMessage("Cycle manually finished. System Ready.");
   } else {
@@ -1031,11 +970,11 @@ void manualStartCycle() {
   }
 }
 
-void updateMachineStartSignalDebouncer() {
+void updateTransferArmStartSignalDebouncer() {
   // Force update the debouncer to capture the current state
-  // This is crucial for detecting the next falling edge
+  // This is crucial for detecting the next signal change
   for (int i = 0; i < 5; i++) {  // Multiple updates to ensure proper state capture
-    machineStartSignal.update();
+    transferArmStartSignal.update();
     delay(10);
   }
 }
