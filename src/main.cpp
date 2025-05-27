@@ -9,6 +9,7 @@
 #include <esp_wifi.h>
 
 #include "webpage.h"
+#include "cutting_cycle.h"
 
 // WiFi credentials - make these available to the whole program
 namespace Config {
@@ -45,12 +46,13 @@ constexpr int ENABLE = 27;
 constexpr int LEFT_CLAMP = 13;
 constexpr int RIGHT_CLAMP = 12;
 constexpr int ALIGN_CYLINDER = 14;
+constexpr int TRANSFER_ARM_SIGNAL = 2;  // Signal to transfer arm to prevent Z-axis lowering during return
 }  // namespace Pins
 
 // Motion Parameters
 namespace Motion {
 constexpr int STEPS_PER_INCH = 43;   // Halved from 63 for the 30:80 tooth ratio
-constexpr float HOME_OFFSET = 0.65;  // Position value stays the same
+constexpr float HOME_OFFSET = 1.1;  // Position value stays the same
 constexpr float APPROACH_DISTANCE = 5.0;  // Position value stays the same
 constexpr float CUTTING_DISTANCE = 7.3;   // Position value stays the same
 constexpr float FORWARD_DISTANCE = 29.5;  // Position value stays the same
@@ -156,10 +158,11 @@ void manualToggleLeftClamp();
 void manualToggleRightClamp();
 void manualToggleAlignCylinder();
 void manualStartCycle();
+void updateMachineStartSignalDebouncer();
 
 // Function to send log messages to Serial and WebSocket
-void logMessage(const String &message, const String &level = "info",
-                bool excludeSerial = false) {
+void logMessage(const String &message, const String &level,
+                bool excludeSerial) {
   if (!excludeSerial) {
     // Serial.println(message);
   }
@@ -413,6 +416,7 @@ void loop() {
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
+    updateMachineStartSignalDebouncer();
     currentState = SystemState::READY;
     logMessage("Cycle from button finished. System Ready.");
   }
@@ -422,6 +426,7 @@ void loop() {
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
+    updateMachineStartSignalDebouncer();
     currentState = SystemState::READY;
     logMessage("Cycle from machine signal finished. System Ready.");
   }
@@ -439,6 +444,7 @@ void initializeHardware() {
   pinMode(Pins::LEFT_CLAMP, OUTPUT);
   pinMode(Pins::RIGHT_CLAMP, OUTPUT);
   pinMode(Pins::ALIGN_CYLINDER, OUTPUT);
+  pinMode(Pins::TRANSFER_ARM_SIGNAL, OUTPUT);
 
   // Initialize clamps to engaged state (extended)
   digitalWrite(Pins::LEFT_CLAMP, LOW);   // Start with clamps engaged
@@ -446,6 +452,9 @@ void initializeHardware() {
 
   // Initialize alignment cylinder to retracted position
   digitalWrite(Pins::ALIGN_CYLINDER, LOW);
+  
+  // Initialize transfer arm signal to LOW (not returning)
+  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
 
   // Setup debouncing
   homeSwitch.attach(Pins::HOME_SWITCH);
@@ -532,236 +541,7 @@ void performHomingSequence() {
   logMessage("✅ Homing complete");
 }
 
-void runCuttingCycle() {
-  // Reset analysis result tracking at the start of each cycle
-  lastDetectedClass = "";
-  analysisResultReceived = false;
 
-  // Initial left clamp pulse and alignment cylinder extension
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage (extend) left clamp
-
-  // Left clamp only extends for 100ms
-  delay(100);
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);      // Retract left clamp
-  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
-
-  // Alignment cylinder stays extended for the remainder of the time
-  delay(300);
-
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
-  delay(125);
-
-  // Engage clamps
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Engage right clamp
-  delay(200);
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage left clamp
-
-  // Check camera signal using debounced value
-  if (cameraSignal.read() == HIGH) {
-    // Send burst request to webcam endpoint
-    sendBurstRequest();
-
-    // Wait for analysis result (max 2 seconds)
-    unsigned long startWaitTime = millis();
-    unsigned long waitTimeout = 2000;  // Increased from 700ms to 2000ms
-    logMessage("Waiting for wood analysis result...");
-
-    while (!analysisResultReceived &&
-           (millis() - startWaitTime < waitTimeout)) {
-      // Update WebSocket clients and handle serial responses more frequently
-      ws.cleanupClients();
-      // Check for and process any available serial responses
-      if (Serial.available()) {
-        String response = Serial.readStringUntil('\n');
-        response.trim();
-        if (response.length() > 0 && response.startsWith("{")) {
-          handleSerialResponse(response);  // Process JSON responses during wait
-        }
-      }
-      delay(10);  // Smaller delay for more responsive checking
-    }
-
-    // Handle timeout case for inference timing
-    if (!analysisResultReceived && inferenceTimingActive) {
-      unsigned long timeoutDuration = millis() - inferenceStartTime;
-      logMessage("Analysis timeout after " + String(timeoutDuration) + " ms",
-                 "warn");
-      inferenceTimingActive = false;
-    }
-
-    // Check if we received analysis result and it's "Empty"
-    if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("Empty")) {
-      logMessage("======= SHORT-CIRCUITING CYCLE =======");
-      logMessage("Empty wood detected - skipping cutting operations");
-      logMessage("========================================");
-
-      // Release clamps and return to home position
-      releaseClamps();
-
-      // Return directly to home
-      moveStepperToPosition(currentHomeOffset, Motion::RETURN_SPEED,
-                            Motion::RETURN_ACCEL);
-
-      // At the end of the cycle, add a small delay
-      delay(50);
-
-      // Force update the debouncer to capture the current state
-      for (int i = 0; i < 5; i++) {
-        machineStartSignal.update();
-        delay(10);
-      }
-
-      logMessage("✅ Cycle short-circuited and completed!");
-      return;  // Exit the function early
-    }
-  } else {
-    logMessage("Camera not ready (signal LOW)");
-  }
-
-  // Approach phase
-  logMessage("🚀 Approach phase...");
-  moveStepperToPosition(Motion::APPROACH_DISTANCE, Motion::APPROACH_SPEED,
-                        Motion::FORWARD_ACCEL);
-
-  // Cutting phase
-  logMessage("🔪 Cutting phase...");
-  moveStepperToPosition(Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE,
-                        Motion::CUTTING_SPEED, Motion::FORWARD_ACCEL * 2);
-
-  // Handle "End" class detection
-  if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
-    logMessage("======= END CLASS DETECTED =======");
-    float intermediatePosition =
-        currentForwardDistance - Motion::END_DROP_DISTANCE_OFFSET;
-    logMessage("Moving to intermediate position: " +
-               String(intermediatePosition));
-
-    // Move to the intermediate position
-    moveStepperToPosition(intermediatePosition, Motion::FINISH_SPEED,
-                          Motion::FORWARD_ACCEL);
-    stepper.stop();  // Ensure motor has completely stopped
-    delay(Timing::MOTION_SETTLE_TIME);
-
-    logMessage("Deactivating left clamp...");
-    digitalWrite(Pins::LEFT_CLAMP, HIGH);  // Deactivate left clamp
-    delay(200);                            // Wait for 500ms
-
-    logMessage("Proceeding to final forward distance.");
-    logMessage("==================================");
-  }
-
-  // Finish phase
-  logMessage("🏁 Finish phase...");
-  moveStepperToPosition(currentForwardDistance, Motion::FINISH_SPEED,
-                        Motion::FORWARD_ACCEL);
-
-  // Ensure motor has completely stopped
-  stepper.stop();
-  delay(50);
-
-  // Verify position before releasing clamps
-  float finalPosition =
-      stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
-  if (abs(finalPosition - currentForwardDistance) >
-      0.1) {  // If more than 0.1 inches off
-    logMessage("⚠ Position error at forward position!", "warn");
-    // Try to correct position
-    moveStepperToPosition(currentForwardDistance, Motion::CUTTING_SPEED,
-                          Motion::FORWARD_ACCEL);
-    stepper.stop();
-    delay(50);
-  }
-
-  // Store the position before releasing clamps
-  long positionBeforeRelease = stepper.currentPosition();
-
-  // Release both clamps simultaneously
-  releaseClamps();
-
-  // Add extra settle time after clamp release
-  delay(100);
-
-  // Verify position hasn't changed significantly after clamp release
-  if (abs(stepper.currentPosition() - positionBeforeRelease) >
-      Motion::STEPS_PER_INCH /
-          4) {  // If position changed by more than 1/4 inch
-    logMessage("⚠ Position shifted during clamp release!", "warn");
-    // Try to correct position before return
-    moveStepperToPosition(currentForwardDistance, Motion::CUTTING_SPEED,
-                          Motion::FORWARD_ACCEL);
-    stepper.stop();
-    delay(50);
-  }
-
-  // --- Updated Return Phase (Home Detection removed) ---
-  // Return phase without checking for premature home switch activation
-  logMessage("🏠 Return to home phase...");
-
-  // First calculate current position and determine a slow-down point
-  float currentPosition =
-      stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
-  float slowDownPosition =
-      currentPosition *
-      0.01;  // Slow down at 1% of the way back (99% of the way there)
-
-  // Fast return: move quickly to the slow-down point
-  stepper.setMaxSpeed(Motion::RETURN_SPEED);
-  stepper.setAcceleration(Motion::RETURN_ACCEL);
-  stepper.moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
-
-  unsigned long fastReturnStartTime = millis();
-  unsigned long fastReturnTimeout = 15000;  // 15 seconds timeout
-
-  while (stepper.distanceToGo() != 0) {
-    // Removed home switch check here
-    stepper.run();
-    if (millis() - fastReturnStartTime > fastReturnTimeout) {
-      logMessage("⚠ Fast return timeout - proceeding to slow approach...",
-                 "warn");
-      break;
-    }
-  }
-
-  // Slow approach phase: move slowly to home position
-  float slowHomingSpeed = Motion::HOMING_SPEED / 2;  // Half of homing speed
-  stepper.setMaxSpeed(slowHomingSpeed);
-  stepper.setAcceleration(Motion::RETURN_ACCEL / 4);  // Gentler acceleration
-  stepper.moveTo(0);  // Move toward home (position 0)
-
-  unsigned long slowApproachStartTime = millis();
-  unsigned long slowApproachTimeout = 20000;  // 20 seconds timeout
-
-  while (stepper.distanceToGo() != 0) {
-    // Removed home switch check here as well
-    stepper.run();
-    if (millis() - slowApproachStartTime > slowApproachTimeout) {
-      logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
-      break;
-    }
-  }
-  // --- End of Updated Return Phase ---
-
-  delay(30);
-
-  // Move to home offset
-  logMessage("Moving to home offset position...");
-  moveStepperToPosition(currentHomeOffset, Motion::APPROACH_SPEED,
-                        Motion::FORWARD_ACCEL);
-
-  // At the end of the cycle, add a small delay to ensure the machine start
-  // signal can be properly detected for the next cycle
-  delay(50);  // Small delay to allow signal to stabilize
-
-  // Force update the debouncer to capture the current state
-  // This is crucial for detecting the next falling edge
-  for (int i = 0; i < 5;
-       i++) {  // Multiple updates to ensure proper state capture
-    machineStartSignal.update();
-    delay(10);
-  }
-
-  logMessage("✅ Cycle complete!");
-}
 
 void moveStepperToPosition(float position, float speed, float acceleration) {
   stepper.setMaxSpeed(speed);
@@ -927,6 +707,10 @@ void printSystemStatus() {
   logMessage(
       "Alignment Cylinder: " +
           String(digitalRead(Pins::ALIGN_CYLINDER) ? "EXTENDED" : "RETRACTED"),
+      "info", true);
+  logMessage(
+      "Transfer Arm Signal: " +
+          String(digitalRead(Pins::TRANSFER_ARM_SIGNAL) ? "ACTIVE (Z-BLOCKED)" : "INACTIVE"),
       "info", true);
 }
 
@@ -1132,7 +916,6 @@ void handleSerialResponse(const String &response) {
     analysisResultReceived = false;
   }
 }
-}
 
 // Function to send serial messages
 void sendSerialMessage(const String &message) {
@@ -1240,9 +1023,19 @@ void manualStartCycle() {
     currentState = SystemState::CYCLE_RUNNING;
 
     runCuttingCycle();
+    updateMachineStartSignalDebouncer();
     currentState = SystemState::READY;
     logMessage("Cycle manually finished. System Ready.");
   } else {
     logMessage("Cannot start cycle: System not in READY state.", "warn");
+  }
+}
+
+void updateMachineStartSignalDebouncer() {
+  // Force update the debouncer to capture the current state
+  // This is crucial for detecting the next falling edge
+  for (int i = 0; i < 5; i++) {  // Multiple updates to ensure proper state capture
+    machineStartSignal.update();
+    delay(10);
   }
 }
