@@ -50,8 +50,6 @@ void runCuttingCycle() {
 
     while (!analysisResultReceived &&
            (millis() - startWaitTime < waitTimeout)) {
-      // Update WebSocket clients and handle serial responses more frequently
-      ws.cleanupClients();
       // Check for and process any available serial responses
       if (Serial.available()) {
         String response = Serial.readStringUntil('\n');

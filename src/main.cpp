@@ -1,21 +1,12 @@
 #include <AccelStepper.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <AsyncTCP.h>
 #include <Bounce2.h>
-#include <ESPAsyncWebServer.h>
 #include <Preferences.h>
-#include <WiFi.h>
-#include <esp_wifi.h>
 
-#include "webpage.h"
 #include "cutting_cycle.h"
 #include "Config/system_config.h"
 #include "Config/pin_definitions.h"
-
-// Create AsyncWebServer object on port 80
-AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");  // Keep only dashboard WebSocket
 
 // Create Preferences object
 Preferences preferences;
@@ -61,13 +52,7 @@ void moveStepperToPosition(float position, float speed, float acceleration);
 void engageClamps();
 void releaseClamps();
 void staggeredReleaseClamps();
-void notifyClients(float distance);
-void notifyHomeOffsetClients(float homeOffset);
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
-             AwsEventType type, void *arg, uint8_t *data, size_t len);
-void initWebSockets();  // Updated to initialize both WebSockets
-void initWebSocket();   // Keep for backward compatibility
+
 void sendBurstRequest();
 void handleSerialResponse(
     const String &response);  // New function to handle serial responses
@@ -83,178 +68,17 @@ void manualToggleAlignCylinder();
 void manualStartCycle();
 void updateTransferArmStartSignalDebouncer();
 
-// Function to send log messages to Serial and WebSocket
+// Function to send log messages to Serial
 void logMessage(const String &message, const String &level,
                 bool excludeSerial) {
   if (!excludeSerial) {
-    // Serial.println(message);
-  }
-
-  if (ws.count() > 0) {  // Check if there are any connected dashboard clients
-    DynamicJsonDocument doc(256);  // Adjust size as needed
-    doc["type"] = "log";
-    doc["message"] = message;
-    doc["level"] = level;
-
-    String jsonMessage;
-    serializeJson(doc, jsonMessage);
-    ws.textAll(jsonMessage);
+    Serial.println(message);
   }
 }
 
-void notifyClients(float distance) {
-  // char msg[8];
-  // snprintf(msg, sizeof(msg), "%.1f", distance);
-  // ws.textAll(msg); // Old method
 
-  if (ws.count() > 0) {
-    DynamicJsonDocument doc(64);
-    doc["type"] = "distance";
-    doc["value"] = distance;
-    String jsonMessage;
-    serializeJson(doc, jsonMessage);
-    ws.textAll(jsonMessage);
-  }
-}
 
-void notifyHomeOffsetClients(float homeOffset) {
-  if (ws.count() > 0) {
-    DynamicJsonDocument doc(64);
-    doc["type"] = "home_offset";
-    doc["value"] = homeOffset;
-    String jsonMessage;
-    serializeJson(doc, jsonMessage);
-    ws.textAll(jsonMessage);
-  }
-}
 
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-  AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len &&
-      info->opcode == WS_TEXT) {
-    data[len] = 0;
-    // Check if the message is JSON or plain text
-    if (data[0] == '{') {            // Assuming JSON messages start with '{'
-      DynamicJsonDocument doc(256);  // Adjust size as needed
-      DeserializationError error = deserializeJson(doc, (char *)data);
-
-      if (error) {
-        logMessage(
-            "Failed to parse JSON from WebSocket: " + String(error.c_str()),
-            "error");
-        return;
-      }
-
-      const char *type = doc["type"];
-
-      if (type && strcmp(type, "manual_control") == 0) {
-        const char *command = doc["command"];
-        if (command) {
-          logMessage("Manual control command received: " + String(command));
-          if (currentState != SystemState::READY) {
-            logMessage(
-                "Manual control disabled: System not ready or cycle running.",
-                "warn");
-            return;
-          }
-
-          if (strcmp(command, "home") == 0) {
-            manualHome();
-          } else if (strcmp(command, "jog_left") == 0) {
-            float distance =
-                doc["distance"] | 0.1f;  // Default to 0.1 if not provided
-            manualJog(true, distance);
-          } else if (strcmp(command, "jog_right") == 0) {
-            float distance =
-                doc["distance"] | 0.1f;  // Default to 0.1 if not provided
-            manualJog(false, distance);
-          } else if (strcmp(command, "toggle_left_clamp") == 0) {
-            manualToggleLeftClamp();
-          } else if (strcmp(command, "toggle_right_clamp") == 0) {
-            manualToggleRightClamp();
-          } else if (strcmp(command, "toggle_align_cylinder") == 0) {
-            manualToggleAlignCylinder();
-          } else if (strcmp(command, "start_cycle") == 0) {
-            manualStartCycle();
-          } else {
-            logMessage("Unknown manual command: " + String(command), "warn");
-          }
-        }
-      } else if (type && strcmp(type, "update_forward_distance") == 0) {
-        float newDistance = doc["value"];
-        if (newDistance >= 0 && newDistance <= 100) {  // Basic validation
-          currentForwardDistance = newDistance;
-          preferences.putFloat("fwd_dist", currentForwardDistance);
-          notifyClients(
-              currentForwardDistance);  // Notify all clients about the change
-          logMessage("Forward distance updated via WebSocket to: " +
-                     String(currentForwardDistance));
-        } else {
-          logMessage(
-              "Invalid forward distance value received: " + String(newDistance),
-              "warn");
-        }
-      } else if (type && strcmp(type, "update_home_offset") == 0) {
-        float newOffset = doc["value"];
-        if (newOffset >= 0 && newOffset <= 5) {  // Basic validation
-          currentHomeOffset = newOffset;
-          preferences.putFloat("home_offset", currentHomeOffset);
-          notifyHomeOffsetClients(
-              currentHomeOffset);  // Notify all clients about the change
-          logMessage("Home offset updated via WebSocket to: " +
-                     String(currentHomeOffset));
-        } else {
-          logMessage("Invalid home offset value received: " + String(newOffset),
-                     "warn");
-        }
-      } else {  // Assume it's the old plain text distance value
-        float newDistance = atof((char *)data);
-        if (newDistance >= 0 && newDistance <= 100) {  // Basic validation
-          currentForwardDistance = newDistance;
-          preferences.putFloat("fwd_dist", currentForwardDistance);
-          notifyClients(
-              currentForwardDistance);  // Notify all clients about the change
-          logMessage("Forward distance updated via WebSocket to: " +
-                     String(currentForwardDistance));
-        } else {
-          logMessage("Invalid distance value received: " + String((char *)data),
-                     "warn");
-        }
-      }
-    }
-  }
-}
-
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
-             AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:
-      logMessage("WebSocket client #" + String(client->id()) +
-                 " connected from " +
-                 String(client->remoteIP().toString().c_str()));
-      notifyClients(currentForwardDistance);
-      notifyHomeOffsetClients(currentHomeOffset);
-      break;
-    case WS_EVT_DISCONNECT:
-      logMessage("WebSocket client #" + String(client->id()) + " disconnected");
-      break;
-    case WS_EVT_DATA:
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
-  }
-}
-
-void initWebSockets() {
-  // Dashboard WebSocket
-  ws.onEvent(onEvent);
-  server.addHandler(&ws);
-}
-
-// For backward compatibility
-void initWebSocket() { initWebSockets(); }
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -274,29 +98,6 @@ void setup() {
   logMessage("Loaded home offset: " + String(currentHomeOffset) + " inches (from preferences)");
   logMessage("Default home offset constant: " + String(Motion::HOME_OFFSET) + " inches");
 
-  // Connect to Wi-Fi using the namespaced credentials
-  WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    logMessage("Connecting to WiFi...");
-  }
-  logMessage("WiFi Connected. IP Address: " + WiFi.localIP().toString());
-
-  // Initialize WebSockets
-  initWebSockets();
-  logMessage("WebSockets initialized.");
-
-  // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", index_html);
-  });
-  logMessage("HTTP route for / configured.");
-
-  // Start server
-  server.begin();
-  logMessage("HTTP server started.");
-
   // Initialize hardware and perform homing sequence
   initializeHardware();
   performHomingSequence();
@@ -309,8 +110,6 @@ void setup() {
 }
 
 void loop() {
-  // Clean up disconnected clients
-  ws.cleanupClients();
 
   // Handle serial communication
   if (Serial.available()) {

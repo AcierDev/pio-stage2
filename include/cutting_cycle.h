@@ -5,12 +5,10 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Bounce2.h>
-#include <ESPAsyncWebServer.h>
 
 // Forward declarations for external dependencies
 extern AccelStepper stepper;
 extern Bounce cameraSignal;
-extern AsyncWebSocket ws;
 extern String lastDetectedClass;
 extern bool analysisResultReceived;
 extern unsigned long inferenceStartTime;
