@@ -83,7 +83,7 @@ void runCuttingCycle() {
       logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
 
       // Return directly to home
-      moveStepperToPosition(currentHomeOffset, Motion::RETURN_SPEED,
+      moveStepperToPosition(Motion::HOME_OFFSET, Motion::RETURN_SPEED,
                             Motion::RETURN_ACCEL);
       
       // Deactivate transfer arm signal - return is complete
@@ -117,7 +117,7 @@ void runCuttingCycle() {
   if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
     logMessage("======= END CLASS DETECTED =======");
     float intermediatePosition =
-        currentForwardDistance - Motion::END_DROP_DISTANCE_OFFSET;
+        Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
     logMessage("Moving to intermediate position: " +
                String(intermediatePosition));
 
@@ -137,7 +137,7 @@ void runCuttingCycle() {
 
   // Finish phase
   logMessage("🏁 Finish phase...");
-  moveStepperToPosition(currentForwardDistance, Motion::FINISH_SPEED,
+  moveStepperToPosition(Motion::FORWARD_DISTANCE, Motion::FINISH_SPEED,
                         Motion::FORWARD_ACCEL);
 
   // Ensure motor has completely stopped
@@ -147,11 +147,11 @@ void runCuttingCycle() {
   // Verify position before releasing clamps
   float finalPosition =
       stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
-  if (abs(finalPosition - currentForwardDistance) >
+  if (abs(finalPosition - Motion::FORWARD_DISTANCE) >
       0.1) {  // If more than 0.1 inches off
     logMessage("⚠ Position error at forward position!", "warn");
     // Try to correct position
-    moveStepperToPosition(currentForwardDistance, Motion::CUTTING_SPEED,
+    moveStepperToPosition(Motion::FORWARD_DISTANCE, Motion::CUTTING_SPEED,
                           Motion::FORWARD_ACCEL);
     stepper.stop();
     delay(50);
@@ -172,7 +172,7 @@ void runCuttingCycle() {
           4) {  // If position changed by more than 1/4 inch
     logMessage("⚠ Position shifted during clamp release!", "warn");
     // Try to correct position before return
-    moveStepperToPosition(currentForwardDistance, Motion::CUTTING_SPEED,
+    moveStepperToPosition(Motion::FORWARD_DISTANCE, Motion::CUTTING_SPEED,
                           Motion::FORWARD_ACCEL);
     stepper.stop();
     delay(50);
@@ -234,7 +234,7 @@ void runCuttingCycle() {
 
   // Move to home offset
   logMessage("Moving to home offset position...");
-  moveStepperToPosition(currentHomeOffset, Motion::APPROACH_SPEED,
+  moveStepperToPosition(Motion::HOME_OFFSET, Motion::APPROACH_SPEED,
                         Motion::FORWARD_ACCEL);
   
   // Deactivate transfer arm signal - return is complete

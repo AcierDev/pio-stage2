@@ -2,20 +2,10 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Bounce2.h>
-#include <Preferences.h>
 
 #include "cutting_cycle.h"
 #include "Config/system_config.h"
 #include "Config/pin_definitions.h"
-
-// Create Preferences object
-Preferences preferences;
-
-// Variable to store the current forward distance
-float currentForwardDistance;  // Will be initialized in setup()
-
-// Variable to store the current home offset
-float currentHomeOffset;  // Will be initialized in setup()
 
 // System state
 enum class SystemState { INITIALIZING, HOMING, READY, CYCLE_RUNNING, ERROR };
@@ -84,28 +74,12 @@ void setup() {
   Serial.begin(SERIAL_BAUDRATE);
   logMessage("Serial initialized at " + String(SERIAL_BAUDRATE) + " baud.");
 
-  // Initialize preferences
-  preferences.begin("tablesaw", false);  // false = R/W mode
-  logMessage("Preferences initialized.");
-
-  // Load saved forward distance or use default if not found
-  currentForwardDistance =
-      preferences.getFloat("fwd_dist", Motion::FORWARD_DISTANCE);
-  logMessage("Loaded forward distance: " + String(currentForwardDistance));
-
-  // Load saved home offset or use default if not found
-  currentHomeOffset = preferences.getFloat("home_offset", Motion::HOME_OFFSET);
-  logMessage("Loaded home offset: " + String(currentHomeOffset) + " inches (from preferences)");
-  logMessage("Default home offset constant: " + String(Motion::HOME_OFFSET) + " inches");
-
   // Initialize hardware and perform homing sequence
   initializeHardware();
   performHomingSequence();
 
   currentState = SystemState::READY;
   logMessage("System Ready!");
-  logMessage("Current Forward Distance: " + String(currentForwardDistance));
-  logMessage("Current Home Offset: " + String(currentHomeOffset));
   printCurrentSettings();
 }
 
@@ -205,7 +179,7 @@ void initializeHardware() {
 void performHomingSequence() {
   // Serial.println("🏠 Starting homing sequence..."); // DO NOT DELETE
   logMessage("🏠 Starting homing sequence...");
-  logMessage("Using home offset: " + String(currentHomeOffset) + " inches");
+  logMessage("Using home offset: " + String(Motion::HOME_OFFSET) + " inches");
   currentState = SystemState::HOMING;
 
   // Clamps are already engaged from initialization
@@ -255,10 +229,10 @@ void performHomingSequence() {
   }
 
   // Now move to home offset with a gentler motion
-  logMessage("Moving to home offset position: " + String(currentHomeOffset) + " inches");
+  logMessage("Moving to home offset position: " + String(Motion::HOME_OFFSET) + " inches");
   stepper.setMaxSpeed(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
   stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
-  moveStepperToPosition(currentHomeOffset, Motion::HOMING_SPEED / 2,
+  moveStepperToPosition(Motion::HOME_OFFSET, Motion::HOMING_SPEED / 2,
                         Motion::FORWARD_ACCEL / 2);
   
   // Add settle time after reaching home offset
@@ -463,11 +437,7 @@ void printCurrentSettings() {
              true);
   // Serial.print("- Home offset: "); Serial.println(Motion::HOME_OFFSET); // DO
   // NOT DELETE
-  logMessage("- Home offset: " + String(currentHomeOffset) + " (Current Saved)",
-             "info", true);
-  logMessage("- Default Home offset: " + String(Motion::HOME_OFFSET) +
-                 " (Default Constant)",
-             "info", true);
+  logMessage("- Home offset: " + String(Motion::HOME_OFFSET), "info", true);
   // Serial.print("- Approach distance: ");
   // Serial.println(Motion::APPROACH_DISTANCE); // DO NOT DELETE
   logMessage("- Approach distance: " + String(Motion::APPROACH_DISTANCE),
@@ -478,39 +448,34 @@ void printCurrentSettings() {
              true);
   // Serial.print("- Forward distance: ");
   // Serial.println(Motion::FORWARD_DISTANCE); // DO NOT DELETE
-  logMessage("- Forward distance: " + String(currentForwardDistance) +
-                 " (Current Saved)",
-             "info", true);  // Show current actual
-  logMessage("- Default Forward distance: " + String(Motion::FORWARD_DISTANCE) +
-                 " (Default Constant)",
-             "info", true);
+  logMessage("- Forward distance: " + String(Motion::FORWARD_DISTANCE), "info", true);
 
-  // Serial.println("\nSpeed Settings (inches/sec):"); // DO NOT DELETE
-  logMessage("\nSpeed Settings (inches/sec):", "info", true);
-  // Serial.print("- Homing: "); Serial.println(Motion::HOMING_SPEED_IPS); // DO
+  // Serial.println("\nSpeed Settings (steps/sec):"); // DO NOT DELETE
+  logMessage("\nSpeed Settings (steps/sec):", "info", true);
+  // Serial.print("- Homing: "); Serial.println(Motion::HOMING_SPEED); // DO
   // NOT DELETE
-  logMessage("- Homing: " + String(Motion::HOMING_SPEED_IPS), "info", true);
-  // Serial.print("- Approach: "); Serial.println(Motion::APPROACH_SPEED_IPS);
+  logMessage("- Homing: " + String(Motion::HOMING_SPEED), "info", true);
+  // Serial.print("- Approach: "); Serial.println(Motion::APPROACH_SPEED);
   // // DO NOT DELETE
-  logMessage("- Approach: " + String(Motion::APPROACH_SPEED_IPS), "info", true);
-  // Serial.print("- Cutting: "); Serial.println(Motion::CUTTING_SPEED_IPS); //
+  logMessage("- Approach: " + String(Motion::APPROACH_SPEED), "info", true);
+  // Serial.print("- Cutting: "); Serial.println(Motion::CUTTING_SPEED); //
   // DO NOT DELETE
-  logMessage("- Cutting: " + String(Motion::CUTTING_SPEED_IPS), "info", true);
-  // Serial.print("- Finish: "); Serial.println(Motion::FINISH_SPEED_IPS); // DO
+  logMessage("- Cutting: " + String(Motion::CUTTING_SPEED), "info", true);
+  // Serial.print("- Finish: "); Serial.println(Motion::FINISH_SPEED); // DO
   // NOT DELETE
-  logMessage("- Finish: " + String(Motion::FINISH_SPEED_IPS), "info", true);
-  // Serial.print("- Return: "); Serial.println(Motion::RETURN_SPEED_IPS); // DO
+  logMessage("- Finish: " + String(Motion::FINISH_SPEED), "info", true);
+  // Serial.print("- Return: "); Serial.println(Motion::RETURN_SPEED); // DO
   // NOT DELETE
-  logMessage("- Return: " + String(Motion::RETURN_SPEED_IPS), "info", true);
+  logMessage("- Return: " + String(Motion::RETURN_SPEED), "info", true);
 
-  // Serial.println("\nAcceleration Settings (inches/sec²):"); // DO NOT DELETE
-  logMessage("\nAcceleration Settings (inches/sec²):", "info", true);
-  // Serial.print("- Forward: "); Serial.println(Motion::FORWARD_ACCEL_IPS2); //
+  // Serial.println("\nAcceleration Settings (steps/sec²):"); // DO NOT DELETE
+  logMessage("\nAcceleration Settings (steps/sec²):", "info", true);
+  // Serial.print("- Forward: "); Serial.println(Motion::FORWARD_ACCEL); //
   // DO NOT DELETE
-  logMessage("- Forward: " + String(Motion::FORWARD_ACCEL_IPS2), "info", true);
-  // Serial.print("- Return: "); Serial.println(Motion::RETURN_ACCEL_IPS2); //
+  logMessage("- Forward: " + String(Motion::FORWARD_ACCEL), "info", true);
+  // Serial.print("- Return: "); Serial.println(Motion::RETURN_ACCEL); //
   // DO NOT DELETE
-  logMessage("- Return: " + String(Motion::RETURN_ACCEL_IPS2), "info", true);
+  logMessage("- Return: " + String(Motion::RETURN_ACCEL), "info", true);
 
   // Serial.println("\nTiming Settings (ms):"); // DO NOT DELETE
   logMessage("\nTiming Settings (ms):", "info", true);
@@ -696,11 +661,11 @@ void manualJog(bool jogLeft, float distance) {
       if (targetPosInches < -0.1) targetPosInches = -0.1;
     } else {
       targetPosInches = currentPosInches + distance;
-      // Prevent jogging beyond a safe maximum (e.g., currentForwardDistance +
+      // Prevent jogging beyond a safe maximum (e.g., Motion::FORWARD_DISTANCE +
       // some buffer or an absolute max) For now, let's use a generous limit,
       // but this should be refined.
-      if (targetPosInches > (currentForwardDistance + 10.0))
-        targetPosInches = currentForwardDistance + 10.0;
+      if (targetPosInches > (Motion::FORWARD_DISTANCE + 10.0))
+        targetPosInches = Motion::FORWARD_DISTANCE + 10.0;
     }
 
     logMessage("Current position: " + String(currentPosInches) +

@@ -13,8 +13,6 @@ extern String lastDetectedClass;
 extern bool analysisResultReceived;
 extern unsigned long inferenceStartTime;
 extern bool inferenceTimingActive;
-extern float currentForwardDistance;
-extern float currentHomeOffset;
 
 // Pin definitions (from main.cpp)
 namespace Pins {
@@ -27,8 +25,10 @@ extern const int TRANSFER_ARM_SIGNAL;
 // Motion parameters (from main.cpp)
 namespace Motion {
 extern const int STEPS_PER_INCH;
+extern const float HOME_OFFSET;
 extern const float APPROACH_DISTANCE;
 extern const float CUTTING_DISTANCE;
+extern const float FORWARD_DISTANCE;
 extern const float END_DROP_DISTANCE_OFFSET;
 extern const float APPROACH_SPEED;
 extern const float CUTTING_SPEED;

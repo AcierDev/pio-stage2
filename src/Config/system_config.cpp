@@ -18,27 +18,16 @@ const float CUTTING_DISTANCE = 7.3f;   // Position value stays the same
 const float FORWARD_DISTANCE = 29.5f;  // Position value stays the same
 const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward distance
 
-// Speed Settings (inches/second)
-const float HOMING_SPEED_IPS = 23.4375f;  // 750 steps/sec ÷ 32 steps/inch
-const float APPROACH_SPEED_IPS = 312.5f;  // 10000 steps/sec ÷ 32 steps/inch
-const float CUTTING_SPEED_IPS = 1.96875f;  // 63 steps/sec ÷ 32 steps/inch
-const float FINISH_SPEED_IPS = 390.625f;  // 12500 steps/sec ÷ 32 steps/inch
-const float RETURN_SPEED_IPS = 390.625f;  // 12500 steps/sec ÷ 32 steps/inch
+// Speed Settings (steps/second)
+const float HOMING_SPEED = 1000.0f;    // 23.4375 IPS * 43 steps/inch
+const float APPROACH_SPEED = 14000.0f;    // 312.5 IPS * 43 steps/inch  
+const float CUTTING_SPEED = 85.0f;    // 1.96875 IPS * 43 steps/inch
+const float FINISH_SPEED = 17000.0f;    // 390.625 IPS * 43 steps/inch
+const float RETURN_SPEED = 17000.0f;    // 390.625 IPS * 43 steps/inch
 
-// Speed Settings (steps/second) - For internal use
-const float HOMING_SPEED = HOMING_SPEED_IPS * STEPS_PER_INCH;
-const float APPROACH_SPEED = APPROACH_SPEED_IPS * STEPS_PER_INCH;
-const float CUTTING_SPEED = CUTTING_SPEED_IPS * STEPS_PER_INCH;
-const float FINISH_SPEED = FINISH_SPEED_IPS * STEPS_PER_INCH;
-const float RETURN_SPEED = RETURN_SPEED_IPS * STEPS_PER_INCH;
-
-// Acceleration Settings (inches/second^2)
-const float FORWARD_ACCEL_IPS2 = 234.375f;  // 7500 steps/sec^2 ÷ 32 steps/inch
-const float RETURN_ACCEL_IPS2 = 234.375f;   // 7500 steps/sec^2 ÷ 32 steps/inch
-
-// Acceleration Settings (steps/second^2) - For internal use
-const float FORWARD_ACCEL = FORWARD_ACCEL_IPS2 * STEPS_PER_INCH;
-const float RETURN_ACCEL = RETURN_ACCEL_IPS2 * STEPS_PER_INCH;
+// Acceleration Settings (steps/second^2)
+const float FORWARD_ACCEL = 10000.0f;  // 234.375 IPS^2 * 43 steps/inch
+const float RETURN_ACCEL = 10000.0f;   // 234.375 IPS^2 * 43 steps/inch
 }  // namespace Motion
 
 // Timing Settings (milliseconds)
