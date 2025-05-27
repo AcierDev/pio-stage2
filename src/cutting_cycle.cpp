@@ -1,11 +1,12 @@
 #include "cutting_cycle.h"
+#include "Config/system_config.h"
 
 //* ************************************************************************
 //* ************************ CUTTING CYCLE ****************************
 //* ************************************************************************
-// This file contains the main cutting cycle logic and related functions
-// for the Stage 2 cutting controller. The cycle includes wood analysis,
-// positioning, cutting operations, and return to home.
+// This file contains the main cutting cycle logic for the Stage 2 cutting 
+// controller. The cycle includes wood analysis, positioning, cutting 
+// operations, and return to home.
 
 void runCuttingCycle() {
   // Reset analysis result tracking at the start of each cycle

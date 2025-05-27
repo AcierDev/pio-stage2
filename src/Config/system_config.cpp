@@ -19,15 +19,15 @@ const float FORWARD_DISTANCE = 29.5f;  // Position value stays the same
 const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward distance
 
 // Speed Settings (steps/second)
-const float HOMING_SPEED = 1000.0f;    // 23.4375 IPS * 43 steps/inch
-const float APPROACH_SPEED = 14000.0f;    // 312.5 IPS * 43 steps/inch  
-const float CUTTING_SPEED = 85.0f;    // 1.96875 IPS * 43 steps/inch
-const float FINISH_SPEED = 17000.0f;    // 390.625 IPS * 43 steps/inch
-const float RETURN_SPEED = 17000.0f;    // 390.625 IPS * 43 steps/inch
+const float HOMING_SPEED = 1000;    // 23.4375 IPS * 43 steps/inch
+const float APPROACH_SPEED = 14000;    // 312.5 IPS * 43 steps/inch  
+const float CUTTING_SPEED = 85;    // 1.96875 IPS * 43 steps/inch
+const float FINISH_SPEED = 17000;    // 390.625 IPS * 43 steps/inch
+const float RETURN_SPEED = 17000;    // 390.625 IPS * 43 steps/inch
 
 // Acceleration Settings (steps/second^2)
-const float FORWARD_ACCEL = 10000.0f;  // 234.375 IPS^2 * 43 steps/inch
-const float RETURN_ACCEL = 10000.0f;   // 234.375 IPS^2 * 43 steps/inch
+const float FORWARD_ACCEL = 10000;  // 234.375 IPS^2 * 43 steps/inch
+const float RETURN_ACCEL = 10000;   // 234.375 IPS^2 * 43 steps/inch
 }  // namespace Motion
 
 // Timing Settings (milliseconds)

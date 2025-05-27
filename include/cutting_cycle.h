@@ -54,4 +54,45 @@ void sendSerialMessage(const String &message);
 void logMessage(const String &message, const String &level = "info", bool excludeSerial = false);
 void updateTransferArmStartSignalDebouncer();
 
+//* ************************************************************************
+//* ****************** CUTTING CYCLE FUNCTIONS ********************
+//* ************************************************************************
+// This module contains all functions related to the cutting cycle operations
+// including state management, motion control, and sequence execution
+
+namespace CuttingCycle {
+
+//* ************************************************************************
+//* ************************ STATE MANAGEMENT *************************
+//* ************************************************************************
+// Functions for managing cutting cycle states
+
+void initializeCuttingCycle();
+void resetCuttingCycle();
+bool startCuttingCycle();
+void stopCuttingCycle();
+
+//* ************************************************************************
+//* ************************ MOTION CONTROL ***************************
+//* ************************************************************************
+// Functions for controlling cutting motion sequences
+
+void executeHomingSequence();
+void executeApproachSequence();
+void executeCuttingSequence();
+void executeFinishSequence();
+void executeReturnSequence();
+
+//* ************************************************************************
+//* ************************ CYCLE MANAGEMENT *************************
+//* ************************************************************************
+// Functions for complete cycle management
+
+void runFullCuttingCycle();
+void handleCycleError();
+bool isCycleComplete();
+void updateCycleStatus();
+
+} // namespace CuttingCycle
+
 #endif // CUTTING_CYCLE_H 
