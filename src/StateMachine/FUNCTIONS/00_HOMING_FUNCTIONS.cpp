@@ -1,5 +1,6 @@
 #include "system_states.h"
 #include "StateMachine/FUNCTIONS/00_HOMING_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************

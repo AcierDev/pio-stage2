@@ -228,8 +228,11 @@ void performHomingSequence() {
   logMessage("Moving to home offset position: " + String(Motion::HOME_OFFSET) + " inches");
   stepper.setMaxSpeed(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
   stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
-  moveStepperToPosition(Motion::HOME_OFFSET, Motion::HOMING_SPEED / 2,
-                        Motion::FORWARD_ACCEL / 2);
+  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+  
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+  }
   
   // Add settle time after reaching home offset
   delay(Timing::HOME_SETTLE_TIME);
