@@ -721,12 +721,219 @@ void updateTransferArmStartSignalDebouncer() {
 }
 
 void runCuttingCycle() {
-  //! Main cutting cycle function that orchestrates the complete cutting sequence
-  logMessage("🔄 Starting cutting cycle...");
+  // Reset analysis result tracking at the start of each cycle
+  lastDetectedClass = "";
+  analysisResultReceived = false;
+
+  // Initial left clamp pulse and alignment cylinder extension
+  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage (extend) left clamp
+
+  // Left clamp only extends for 300ms (200 ms + 100 ms delay)
+  delay(200);
+  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
+  delay(100);
+  digitalWrite(Pins::LEFT_CLAMP, HIGH);      // Retract left clamp
+
+  // Alignment cylinder stays extended for the remainder of the time
+  delay(100);
+
+  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
+  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
+  delay(150);
+  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
+  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
+  delay(150);
+  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
+  delay(125);
+
+  // Engage clamps
+  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
+  delay(200);
+  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Extend left clamp
+  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
+
+  // Check camera signal using debounced value
+  if (cameraSignal.read() == HIGH) {
+    // Send burst request to camera system
+    sendSerialMessage("BURST");
+    inferenceStartTime = millis();
+    inferenceTimingActive = true;
+
+    // Wait for analysis result (max 2 seconds)
+    unsigned long startWaitTime = millis();
+    unsigned long waitTimeout = 2000;
+    logMessage("Waiting for wood analysis result...");
+
+    while (!analysisResultReceived && (millis() - startWaitTime < waitTimeout)) {
+      // Check for and process any available serial responses
+      if (Serial.available()) {
+        String response = Serial.readStringUntil('\n');
+        response.trim();
+        if (response.length() > 0 && response.startsWith("{")) {
+          handleSerialResponse(response);
+        }
+      }
+      delay(10);
+    }
+
+    // Handle timeout case for inference timing
+    if (!analysisResultReceived && inferenceTimingActive) {
+      unsigned long timeoutDuration = millis() - inferenceStartTime;
+      logMessage("Analysis timeout after " + String(timeoutDuration) + " ms", "warn");
+      inferenceTimingActive = false;
+    }
+
+    // Check if we received analysis result and it's "Empty"
+    if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("Empty")) {
+      logMessage("======= SHORT-CIRCUITING CYCLE =======");
+      logMessage("Empty wood detected - skipping cutting operations");
+      logMessage("========================================");
+
+      // Release clamps and return to home position
+      releaseClamps();
+
+      // Signal transfer arm to prevent Z-axis lowering during return
+      digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
+      logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
+
+      // Return directly to home
+      stepper.setMaxSpeed(Motion::RETURN_SPEED);
+      stepper.setAcceleration(Motion::RETURN_ACCEL);
+      stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+      while (stepper.distanceToGo() != 0) {
+        stepper.run();
+      }
+      
+      // Deactivate transfer arm signal - return is complete
+      digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
+      logMessage("Transfer arm signal deactivated (return complete)");
+
+      delay(50);
+      updateTransferArmStartSignalDebouncer();
+      logMessage("✅ Cycle short-circuited and completed!");
+      return;
+    }
+  } else {
+    logMessage("Camera not ready (signal LOW)");
+  }
+
+  // Approach phase
+  logMessage("🚀 Approach phase...");
+  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
+  stepper.setAcceleration(Motion::FORWARD_ACCEL);
+  stepper.moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+  }
+
+  // Cutting phase
+  logMessage("🔪 Cutting phase...");
+  stepper.setMaxSpeed(Motion::CUTTING_SPEED);
+  stepper.setAcceleration(Motion::FORWARD_ACCEL * 2);
+  stepper.moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+  }
+
+  // Handle "End" class detection
+  if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
+    logMessage("======= END CLASS DETECTED =======");
+    float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
+    logMessage("Moving to intermediate position: " + String(intermediatePosition));
+
+    stepper.setMaxSpeed(Motion::FINISH_SPEED);
+    stepper.setAcceleration(Motion::FORWARD_ACCEL);
+    stepper.moveTo(intermediatePosition * Motion::STEPS_PER_INCH);
+    while (stepper.distanceToGo() != 0) {
+      stepper.run();
+    }
+    stepper.stop();
+    delay(Timing::MOTION_SETTLE_TIME);
+
+    logMessage("Deactivating left clamp...");
+    digitalWrite(Pins::LEFT_CLAMP, HIGH);  // Deactivate left clamp
+    delay(200);
+
+    logMessage("Proceeding to final forward distance.");
+    logMessage("==================================");
+  }
+
+  // Finish phase
+  logMessage("🏁 Finish phase...");
+  stepper.setMaxSpeed(Motion::FINISH_SPEED);
+  stepper.setAcceleration(Motion::FORWARD_ACCEL);
+  stepper.moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+  }
+
+  stepper.stop();
+  delay(50);
+
+  // Release both clamps simultaneously
+  releaseClamps();
+  delay(100);
+
+  // Return phase
+  logMessage("🏠 Return to home phase...");
   
-  // Initialize and execute the cutting cycle using StateMachine
-  initializeCuttingCycle();
-  executeCuttingCycle();
+  // Signal transfer arm to prevent Z-axis lowering during return
+  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
+  logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
+
+  // Fast return to slow-down point
+  float currentPosition = stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
+  float slowDownPosition = currentPosition * 0.01;
+
+  stepper.setMaxSpeed(Motion::RETURN_SPEED);
+  stepper.setAcceleration(Motion::RETURN_ACCEL);
+  stepper.moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
+
+  unsigned long fastReturnStartTime = millis();
+  unsigned long fastReturnTimeout = 15000;
+
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+    if (millis() - fastReturnStartTime > fastReturnTimeout) {
+      logMessage("⚠ Fast return timeout - proceeding to slow approach...", "warn");
+      break;
+    }
+  }
+
+  // Slow approach to home position
+  float slowHomingSpeed = Motion::HOMING_SPEED / 2;
+  stepper.setMaxSpeed(slowHomingSpeed);
+  stepper.setAcceleration(Motion::RETURN_ACCEL / 4);
+  stepper.moveTo(0);
+
+  unsigned long slowApproachStartTime = millis();
+  unsigned long slowApproachTimeout = 20000;
+
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+    if (millis() - slowApproachStartTime > slowApproachTimeout) {
+      logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
+      break;
+    }
+  }
+
+  delay(30);
+
+  // Move to home offset
+  logMessage("Moving to home offset position...");
+  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
+  stepper.setAcceleration(Motion::FORWARD_ACCEL);
+  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+  while (stepper.distanceToGo() != 0) {
+    stepper.run();
+  }
   
-  logMessage("✅ Cutting cycle completed.");
+  // Deactivate transfer arm signal - return is complete
+  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
+  logMessage("Transfer arm signal deactivated (return complete)");
+
+  delay(50);
+  updateTransferArmStartSignalDebouncer();
+
+  logMessage("✅ Cycle complete!");
 }
