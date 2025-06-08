@@ -10,7 +10,6 @@
             "includePath": [
                 "/Users/akivaweil/Documents/pio-stage2/include",
                 "/Users/akivaweil/Documents/pio-stage2/src",
-                "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/ArduinoJson/src",
                 "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/Bounce2/src",
                 "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/AccelStepper/src",
@@ -228,6 +227,7 @@
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
+                "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -249,7 +249,6 @@
                 "path": [
                     "/Users/akivaweil/Documents/pio-stage2/include",
                     "/Users/akivaweil/Documents/pio-stage2/src",
-                    "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/ArduinoJson/src",
                     "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/Bounce2/src",
                     "/Users/akivaweil/Documents/pio-stage2/.pio/libdeps/esp32/AccelStepper/src",
@@ -467,6 +466,7 @@
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
+                    "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/Users/akivaweil/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",

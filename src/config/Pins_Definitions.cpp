@@ -1,4 +1,4 @@
-#include "Config/pin_definitions.h"
+#include "config/Pins_Definitions.h"
 
 // Pin Configuration - Using ESP32 GPIO pins
 namespace Pins {
@@ -12,8 +12,8 @@ const int CAMERA_SIGNAL = 34;             // Camera signal pin
 const int STEP = 18;
 const int DIR = 5;
 const int ENABLE = 27;
-const int LEFT_CLAMP = 13;
-const int RIGHT_CLAMP = 12;
+const int LEFT_CLAMP = 12;
+const int RIGHT_CLAMP = 13;
 const int ALIGN_CYLINDER = 14;
 const int TRANSFER_ARM_SIGNAL = 2;  // Signal to transfer arm to prevent Z-axis lowering during return
 }  // namespace Pins 

@@ -3,12 +3,12 @@
 #include <ArduinoJson.h>
 #include <Bounce2.h>
 
-#include "cutting_cycle.h"
-#include "Config/system_config.h"
-#include "Config/pin_definitions.h"
+#include "system_states.h"
+#include "config/Config.h"
+#include "config/Pins_Definitions.h"
+#include "StateMachine/STATES/07_CUTTING_CYCLE.h"
 
-// System state
-enum class SystemState { INITIALIZING, HOMING, READY, CYCLE_RUNNING, ERROR };
+// System state (defined in system_states.h)
 
 // Global objects
 AccelStepper stepper(AccelStepper::DRIVER, Pins::STEP, Pins::DIR);
@@ -43,7 +43,6 @@ void engageClamps();
 void releaseClamps();
 void staggeredReleaseClamps();
 
-void sendBurstRequest();
 void handleSerialResponse(
     const String &response);  // New function to handle serial responses
 void sendSerialMessage(
@@ -65,10 +64,6 @@ void logMessage(const String &message, const String &level,
     Serial.println(message);
   }
 }
-
-
-
-
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -252,8 +247,6 @@ void performHomingSequence() {
   // Serial.println("✅ Homing complete"); // DO NOT DELETE
   logMessage("✅ Homing complete");
 }
-
-
 
 void moveStepperToPosition(float position, float speed, float acceleration) {
   stepper.setMaxSpeed(speed);
@@ -499,17 +492,7 @@ void printCurrentSettings() {
   logMessage("", "info", true);  // Empty line for spacing, only to web log
 }
 
-// Send burst request to webcam endpoint using Serial
-void sendBurstRequest() {
-  logMessage("Sending burst request via Serial...");
 
-  // Start timing the inference
-  inferenceStartTime = millis();
-  inferenceTimingActive = true;
-
-  // Send JSON burst command via serial
-  sendSerialMessage("{\"command\":\"burst\"}");
-}
 
 // Function to handle serial responses
 void handleSerialResponse(const String &response) {
@@ -741,4 +724,15 @@ void updateTransferArmStartSignalDebouncer() {
     transferArmStartSignal.update();
     delay(10);
   }
+}
+
+void runCuttingCycle() {
+  //! Main cutting cycle function that orchestrates the complete cutting sequence
+  logMessage("🔄 Starting cutting cycle...");
+  
+  // Initialize and execute the cutting cycle using StateMachine
+  initializeCuttingCycle();
+  executeCuttingCycle();
+  
+  logMessage("✅ Cutting cycle completed.");
 }
