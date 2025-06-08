@@ -1,9 +1,9 @@
 #include "system_states.h"
-#include "StateMachine/FUNCTIONS/03_ANALYSIS_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/AnalysisControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************
-//* ****************** ANALYSIS FUNCTIONS ********************
+//* ****************** ANALYSIS CONTROL FUNCTIONS ********************
 //* ************************************************************************
 // This module implements all functions related to camera analysis operations
 // including signal detection, burst requests, and response handling

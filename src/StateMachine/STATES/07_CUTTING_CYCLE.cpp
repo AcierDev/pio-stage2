@@ -1,5 +1,9 @@
 #include "StateMachine/STATES/07_CUTTING_CYCLE.h"
 #include "StateMachine/FUNCTIONS/07_CUTTING_CYCLE_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
+#include "StateMachine/FUNCTIONS/PneumaticControl.h"
+#include "StateMachine/FUNCTIONS/SignalControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************

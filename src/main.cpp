@@ -7,6 +7,8 @@
 #include "config/Config.h"
 #include "config/Pins_Definitions.h"
 #include "StateMachine/STATES/07_CUTTING_CYCLE.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
+#include "StateMachine/FUNCTIONS/PneumaticControl.h"
 
 // System state (defined in system_states.h)
 
@@ -38,7 +40,6 @@ void runCuttingCycle();
 void handleSerialCommand(const String &command);
 void printCurrentSettings();
 void printSystemStatus();
-void moveStepperToPosition(float position, float speed, float acceleration);
 void engageClamps();
 void releaseClamps();
 void staggeredReleaseClamps();
@@ -246,16 +247,6 @@ void performHomingSequence() {
   isHomed = true;
   // Serial.println("✅ Homing complete"); // DO NOT DELETE
   logMessage("✅ Homing complete");
-}
-
-void moveStepperToPosition(float position, float speed, float acceleration) {
-  stepper.setMaxSpeed(speed);
-  stepper.setAcceleration(acceleration);
-  stepper.moveTo(position * Motion::STEPS_PER_INCH);
-
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
 }
 
 void engageClamps() {

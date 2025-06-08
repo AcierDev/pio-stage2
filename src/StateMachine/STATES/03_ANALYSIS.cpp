@@ -1,5 +1,5 @@
 #include "StateMachine/STATES/03_ANALYSIS.h"
-#include "StateMachine/FUNCTIONS/03_ANALYSIS_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/AnalysisControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************

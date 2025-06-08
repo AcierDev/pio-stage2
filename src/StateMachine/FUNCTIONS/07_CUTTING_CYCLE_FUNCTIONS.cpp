@@ -101,6 +101,9 @@ void executeEmptyClassReturn() {
     // Retract clamps and return to home position
     digitalWrite(Pins::LEFT_CLAMP, HIGH);   // Retract left clamp
     digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
+    delay(200);
+    digitalWrite(Pins::LEFT_CLAMP, LOW);    // Extend left clamp
+    digitalWrite(Pins::RIGHT_CLAMP, LOW);   // Extend right clamp
 
     // Signal transfer arm to prevent Z-axis lowering during return
     digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);

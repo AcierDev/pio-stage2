@@ -1,5 +1,6 @@
 #include "StateMachine/STATES/06_FINISH.h"
-#include "StateMachine/FUNCTIONS/06_FINISH_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************

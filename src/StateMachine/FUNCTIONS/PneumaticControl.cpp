@@ -1,31 +1,16 @@
-#include "StateMachine/FUNCTIONS/02_CLAMP_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/PneumaticControl.h"
 #include "config/Config.h"
 #include "config/Pins_Definitions.h"
 
 //* ************************************************************************
-//* ****************** CLAMP FUNCTIONS ********************
+//* ****************** PNEUMATIC CONTROL FUNCTIONS ********************
 //* ************************************************************************
-// This module contains all functions related to clamp operations
-// including extend, retract, and alignment cylinder control
+// This module contains all functions related to pneumatic operations
+// including clamp cylinders, alignment cylinder, and solenoid control
 
-// Global variables for clamp state tracking
+// Global variables for pneumatic state tracking
 bool clampPositionReached = false;
 bool alignmentCylinderExtended = false;
-
-void initializeClampSequence() {
-    //! Initialize clamp sequence variables
-    clampPositionReached = false;
-    alignmentCylinderExtended = false;
-}
-
-void executeClampSequence() {
-    //! Execute the complete clamp sequence
-    extendClamps();
-    delay(Timing::CLAMP_EXTEND_TIME);
-    extendAlignmentCylinder();
-    delay(Timing::ALIGNMENT_TIME);
-    clampPositionReached = true;
-}
 
 void extendLeftClamp() {
     //! Extend left clamp cylinder
@@ -80,9 +65,4 @@ void executeAlignmentSequence() {
 void waitForClampPosition() {
     //! Wait for clamp to reach position (placeholder)
     delay(Timing::CLAMP_EXTEND_TIME);
-}
-
-void validateClampState() {
-    //! Validate clamp state (placeholder)
-    clampPositionReached = true;
 } 

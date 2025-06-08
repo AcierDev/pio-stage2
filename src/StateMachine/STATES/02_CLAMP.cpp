@@ -1,5 +1,6 @@
 #include "StateMachine/STATES/02_CLAMP.h"
-#include "StateMachine/FUNCTIONS/02_CLAMP_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/PneumaticControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************
@@ -11,8 +12,7 @@
 void executeClampState() {
     //! Execute complete clamp sequence
     initializeClampSequence();
-    extendAlignmentCylinder();
-    waitForClampPosition();
+    executeClampSequence();
     validateClampState();
 }
 

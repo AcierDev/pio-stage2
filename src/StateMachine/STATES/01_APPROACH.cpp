@@ -1,5 +1,6 @@
 #include "StateMachine/STATES/01_APPROACH.h"
-#include "StateMachine/FUNCTIONS/01_APPROACH_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************

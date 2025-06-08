@@ -1,6 +1,8 @@
 #include "StateMachine/STATES/05_RETURN.h"
-#include "StateMachine/FUNCTIONS/05_RETURN_FUNCTIONS.h"
-#include "StateMachine/FUNCTIONS/02_CLAMP_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
+#include "StateMachine/FUNCTIONS/PneumaticControl.h"
+#include "StateMachine/FUNCTIONS/SignalControl.h"
 #include "StateMachine/FUNCTIONS/00_HOMING_FUNCTIONS.h"
 #include "config/Config.h"
 

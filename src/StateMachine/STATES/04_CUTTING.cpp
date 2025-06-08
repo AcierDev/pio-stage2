@@ -1,5 +1,6 @@
 #include "StateMachine/STATES/04_CUTTING.h"
-#include "StateMachine/FUNCTIONS/04_CUTTING_FUNCTIONS.h"
+#include "StateMachine/FUNCTIONS/SequenceManagement.h"
+#include "StateMachine/FUNCTIONS/MotionControl.h"
 #include "config/Config.h"
 
 //* ************************************************************************
