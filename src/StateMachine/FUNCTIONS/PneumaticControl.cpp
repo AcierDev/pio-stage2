@@ -56,11 +56,7 @@ void retractAlignmentCylinder() {
     alignmentCylinderExtended = false;
 }
 
-void executeAlignmentSequence() {
-    //! Execute alignment cylinder sequence
-    extendAlignmentCylinder();
-    delay(Timing::ALIGNMENT_TIME);
-}
+
 
 void waitForClampPosition() {
     //! Wait for clamp to reach position (placeholder)

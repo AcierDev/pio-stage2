@@ -44,23 +44,7 @@ void executeClampSequence() {
     clampPositionReached = true;
 }
 
-void executeApproachMovement() {
-    //! Execute the approach movement to cutting position
-    moveToApproachPosition();
-    waitForApproachComplete();
-}
 
-void executeCuttingMovement() {
-    //! Execute the cutting movement through material
-    moveThroughCuttingDistance();
-    waitForCuttingComplete();
-}
-
-void executeReturnMovement() {
-    //! Execute the complete return movement sequence
-    executeFastReturn();
-    executeSlowApproach();
-}
 
 void validateApproachPosition() {
     //! Validate that approach was successful
@@ -88,19 +72,7 @@ void executeFinishMovement() {
     waitForFinishComplete();
 }
 
-void handleEndClassDetection() {
-    //! Handle "End" class detection with intermediate positioning
-    if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
-        float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
-        moveStepperToPosition(intermediatePosition, Motion::FINISH_SPEED, Motion::FORWARD_ACCEL);
-        stepper.stop();
-        delay(Timing::MOTION_SETTLE_TIME);
 
-        // Retract left clamp for end pieces
-        digitalWrite(Pins::LEFT_CLAMP, HIGH);
-        delay(200);
-    }
-}
 
 void validateFinishPosition() {
     //! Validate that finish was successful

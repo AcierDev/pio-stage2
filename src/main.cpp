@@ -6,6 +6,7 @@
 #include "system_states.h"
 #include "config/Config.h"
 #include "config/Pins_Definitions.h"
+#include "OTA_Manager.h"
 #include "StateMachine/STATES/00_INITIALIZING.h"
 #include "StateMachine/STATES/00_HOMING.h"
 #include "StateMachine/STATES/01_ALIGN.h"
@@ -67,6 +68,10 @@ void setup() {
   Serial.begin(SERIAL_BAUDRATE);
   logMessage("Serial initialized at " + String(SERIAL_BAUDRATE) + " baud.");
 
+  // Initialize OTA functionality
+  initOTA();
+  logMessage("OTA initialized successfully!");
+
   // Initialize hardware and perform homing sequence using organized state machine
   executeInitializingState();
   executeHomingState();
@@ -77,6 +82,9 @@ void setup() {
 }
 
 void loop() {
+  
+  // Handle OTA updates
+  handleOTA();
 
   // Handle serial communication
   if (Serial.available()) {

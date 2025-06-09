@@ -93,7 +93,7 @@ void transitionToNextCycleState() {
 
 void initializeCuttingCycle() {
     //! Initialize cutting cycle to starting state
-    currentCycleState = CYCLE_CLAMP;
+    currentCycleState = CYCLE_ALIGN;
     lastDetectedClass = "";
     analysisResultReceived = false;
 }
