@@ -64,10 +64,10 @@ void executeFastReturn() {
 
 void executeSlowApproach() {
     //! Execute slow approach to home position
-    float slowHomingSpeed = Motion::HOMING_SPEED / 2.0;
+    float slowHomingSpeed = Motion::HOMING_SPEED;
     stepper->setSpeedInHz(slowHomingSpeed);
-    stepper->setAcceleration(Motion::RETURN_ACCEL / 4.0);
-    stepper->moveTo(0);
+    stepper->setAcceleration(Motion::RETURN_ACCEL);
+    stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);  // Go to home offset, not 0
 
     unsigned long slowApproachStartTime = millis();
     unsigned long slowApproachTimeout = 20000;
@@ -75,6 +75,8 @@ void executeSlowApproach() {
     while (stepper->rampState() != RAMP_STATE_IDLE) {
         delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - slowApproachStartTime > slowApproachTimeout) {
+            logMessage("⚠ Slow approach timeout - stopping movement");
+            stepper->forceStop();
             break;
         }
     }
