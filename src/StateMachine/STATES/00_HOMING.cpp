@@ -21,52 +21,36 @@ void performHomingSequence() {
 
     // Clamps are already engaged from initialization
 
-    // Check if we're already on the home switch - if so, move away first
-    homeSwitch.update();
-    if (homeSwitch.read() == HIGH) {
-        logMessage("Already on home switch - moving away first");
-        stepper->setSpeedInHz(Motion::HOMING_SPEED);
-        stepper->setAcceleration(Motion::FORWARD_ACCEL);
-        stepper->move(2000);  // Move 2000 steps away from home
-        
-        while (stepper->rampState() != RAMP_STATE_IDLE) {
-            delay(1);  // Wait for stepper motor ramp to complete
-        }
-        delay(100);  // Extra settle time
-    }
-
-    // Now move toward home switch (negative direction)
+    // First, move a significant distance in the negative direction to ensure
+    // we're past the home switch
     stepper->setSpeedInHz(Motion::HOMING_SPEED);
     stepper->setAcceleration(Motion::FORWARD_ACCEL);
-    stepper->move(-15000);  // Move a large distance toward home
+    stepper->moveTo(-10000);  // Move 10,000 steps in negative direction
 
-    // Monitor for home switch activation during movement
-    bool homeFound = false;
-    while (stepper->rampState() != RAMP_STATE_IDLE && !homeFound) {
+    // Use a much slower approach speed for final homing
+    float slowHomingSpeed = Motion::HOMING_SPEED / 3;  // One-third of normal homing speed
+
+    // Run until we hit the home switch or reach the target
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
         homeSwitch.update();
-        
-        if (homeSwitch.read() == HIGH) {
-            // Home switch activated - stop immediately and set this as position 0
-            stepper->forceStopAndNewPosition(0);
-            homeFound = true;
-            logMessage("Home switch found during movement");
+
+        // If we're within 2000 steps of where we think home might be, slow down significantly
+        if (abs(stepper->getCurrentPosition()) < 2000) {
+            stepper->setSpeedInHz(slowHomingSpeed);
         }
-        delay(1);  // Wait for stepper motor ramp to complete
-    }
 
-    // If we didn't find home switch during movement, check final position
-    if (!homeFound) {
-        homeSwitch.update();
         if (homeSwitch.read() == HIGH) {
+            // When home switch is triggered, stop immediately
+            stepper->forceStop();
             stepper->setCurrentPosition(0);
-            homeFound = true;
-            logMessage("Home switch found at final position");
+            break;
         }
+        delay(1);  // Small delay to allow movement
     }
 
-    // If we still didn't find the home switch, we have a problem
-    if (!homeFound) {
-        logMessage("⚠ Failed to find home switch during homing!", "error");
+    // If we didn't hit the home switch, we have a problem
+    if (homeSwitch.read() == LOW) {
+        logMessage("⚠ Failed to find home switch during initial homing!", "error");
         currentState = SystemState::ERROR;
         return;
     }
