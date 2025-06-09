@@ -15,6 +15,8 @@ extern AccelStepper stepper;
 
 // Function declarations
 void executeReturnState();
+void executeReturnMovement();
+void executeEmptyClassReturn();
 bool isReturnComplete();
 void resetReturnState();
 

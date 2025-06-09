@@ -1,7 +1,7 @@
-#include "StateMachine/STATES/04_CUTTING.h"
-#include "StateMachine/FUNCTIONS/SequenceManagement.h"
-#include "StateMachine/FUNCTIONS/MotionControl.h"
+#include "StateMachine/STATES/03_CUTTING.h"
+#include "system_states.h"
 #include "config/Config.h"
+#include "config/Pins_Definitions.h"
 
 //* ************************************************************************
 //* ************************ CUTTING ***************************
@@ -11,9 +11,18 @@
 
 void executeCuttingState() {
     //! Execute complete cutting sequence
-    initializeCuttingSequence();
     executeCuttingMovement();
-    validateCuttingPosition();
+}
+
+void executeCuttingMovement() {
+    logMessage("🔪 Cutting phase...");
+    stepper.setMaxSpeed(Motion::CUTTING_SPEED);
+    stepper.setAcceleration(Motion::FORWARD_ACCEL * 2);
+    stepper.moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
+    while (stepper.distanceToGo() != 0) {
+        stepper.run();
+    }
+    logMessage("✅ Cutting phase complete");
 }
 
 bool isCuttingComplete() {

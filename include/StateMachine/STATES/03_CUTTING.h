@@ -15,6 +15,7 @@ extern AccelStepper stepper;
 
 // Function declarations
 void executeCuttingState();
+void executeCuttingMovement();
 bool isCuttingComplete();
 void resetCuttingState();
 

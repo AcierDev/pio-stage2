@@ -1,7 +1,7 @@
-#include "StateMachine/STATES/01_APPROACH.h"
-#include "StateMachine/FUNCTIONS/SequenceManagement.h"
-#include "StateMachine/FUNCTIONS/MotionControl.h"
+#include "StateMachine/STATES/02_APPROACH.h"
+#include "system_states.h"
 #include "config/Config.h"
+#include "config/Pins_Definitions.h"
 
 //* ************************************************************************
 //* ************************ APPROACH ***************************
@@ -11,9 +11,18 @@
 
 void executeApproachState() {
     //! Execute complete approach sequence
-    initializeApproachSequence();
     executeApproachMovement();
-    validateApproachPosition();
+}
+
+void executeApproachMovement() {
+    logMessage("🚀 Approach phase...");
+    stepper.setMaxSpeed(Motion::APPROACH_SPEED);
+    stepper.setAcceleration(Motion::FORWARD_ACCEL);
+    stepper.moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
+    while (stepper.distanceToGo() != 0) {
+        stepper.run();
+    }
+    logMessage("✅ Approach phase complete");
 }
 
 bool isApproachComplete() {

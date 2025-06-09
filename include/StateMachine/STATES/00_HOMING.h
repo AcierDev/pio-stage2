@@ -15,6 +15,7 @@ extern AccelStepper stepper;
 
 // Function declarations
 void executeHomingState();
+void performHomingSequence();
 bool isHomingComplete();
 void resetHomingState();
 

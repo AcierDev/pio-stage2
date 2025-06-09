@@ -6,9 +6,11 @@
 #include "system_states.h"
 #include "config/Config.h"
 #include "config/Pins_Definitions.h"
+#include "StateMachine/STATES/00_INITIALIZING.h"
+#include "StateMachine/STATES/00_HOMING.h"
+#include "StateMachine/STATES/01_ALIGN.h"
 #include "StateMachine/STATES/07_CUTTING_CYCLE.h"
-#include "StateMachine/FUNCTIONS/MotionControl.h"
-#include "StateMachine/FUNCTIONS/PneumaticControl.h"
+#include "StateMachine/STATES/08_IDLE.h"
 
 // System state (defined in system_states.h)
 
@@ -34,15 +36,10 @@ bool inferenceTimingActive =
     false;  // Flag to track if we're timing an inference
 
 // Function declarations
-void initializeHardware();
-void performHomingSequence();
 void runCuttingCycle();
 void handleSerialCommand(const String &command);
 void printCurrentSettings();
 void printSystemStatus();
-void engageClamps();
-void releaseClamps();
-void staggeredReleaseClamps();
 
 void handleSerialResponse(
     const String &response);  // New function to handle serial responses
@@ -70,9 +67,9 @@ void setup() {
   Serial.begin(SERIAL_BAUDRATE);
   logMessage("Serial initialized at " + String(SERIAL_BAUDRATE) + " baud.");
 
-  // Initialize hardware and perform homing sequence
-  initializeHardware();
-  performHomingSequence();
+  // Initialize hardware and perform homing sequence using organized state machine
+  executeInitializingState();
+  executeHomingState();
 
   currentState = SystemState::READY;
   logMessage("System Ready!");
@@ -125,149 +122,13 @@ void loop() {
   }
 }
 
-void initializeHardware() {
-  // Configure input pins
-  pinMode(Pins::HOME_SWITCH, INPUT_PULLDOWN);
-  pinMode(Pins::START_BUTTON, INPUT_PULLDOWN);
-  pinMode(Pins::TRANSFER_ARM_START_SIGNAL, INPUT_PULLDOWN);  // Pin 15
-  pinMode(Pins::CAMERA_SIGNAL, INPUT);  // Initialize camera signal pin
+// Hardware initialization moved to StateMachine/STATES/00_INITIALIZING.cpp
 
-  // Configure output pins
-  pinMode(Pins::ENABLE, OUTPUT);
-  pinMode(Pins::LEFT_CLAMP, OUTPUT);
-  pinMode(Pins::RIGHT_CLAMP, OUTPUT);
-  pinMode(Pins::ALIGN_CYLINDER, OUTPUT);
-  pinMode(Pins::TRANSFER_ARM_SIGNAL, OUTPUT);
-
-  // Initialize clamps to engaged state (extended)
-  digitalWrite(Pins::LEFT_CLAMP, LOW);   // Start with clamps engaged
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Start with clamps engaged
-
-  // Initialize alignment cylinder to retracted position
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);
-  
-  // Initialize transfer arm signal to LOW (not returning)
-  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
-
-  // Setup debouncing
-  homeSwitch.attach(Pins::HOME_SWITCH);
-  homeSwitch.interval(10);
-  startButton.attach(Pins::START_BUTTON);
-  startButton.interval(20);
-  transferArmStartSignal.attach(Pins::TRANSFER_ARM_START_SIGNAL);
-  transferArmStartSignal.interval(50);  // 50ms debounce for transfer arm start signal
-  cameraSignal.attach(Pins::CAMERA_SIGNAL);
-  cameraSignal.interval(20);  // Debounce camera signal
-
-  // Initialize stepper
-  digitalWrite(Pins::ENABLE, HIGH);  // Disable briefly
-  delay(100);                        // Wait 1 second for motor to reset
-  digitalWrite(Pins::ENABLE, LOW);   // Enable
-  delay(50);                         // Wait for enable to take effect
-
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-
-  // Serial.println("✅ Hardware initialized"); // DO NOT DELETE
-  logMessage("✅ Hardware initialized");
-}
-
-void performHomingSequence() {
-  // Serial.println("🏠 Starting homing sequence..."); // DO NOT DELETE
-  logMessage("🏠 Starting homing sequence...");
-  logMessage("Using home offset: " + String(Motion::HOME_OFFSET) + " inches");
-  currentState = SystemState::HOMING;
-
-  // Clamps are already engaged from initialization
-
-  // First, move a significant distance in the negative direction to ensure
-  // we're past the home switch
-  stepper.setMaxSpeed(Motion::HOMING_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(-10000);  // Move 10,000 steps in negative direction
-
-  // Use a much slower approach speed for final homing
-  float slowHomingSpeed =
-      Motion::HOMING_SPEED / 3;  // One-third of normal homing speed
-
-  // Run until we hit the home switch or reach the target
-  while (stepper.distanceToGo() != 0) {
-    homeSwitch.update();
-
-    // If we're within 2000 steps of where we think home might be, slow down
-    // significantly
-    if (abs(stepper.currentPosition()) < 2000) {
-      stepper.setMaxSpeed(slowHomingSpeed);
-    }
-
-    if (homeSwitch.read() == HIGH) {
-      // When home switch is triggered, stop immediately
-      stepper.stop();
-      
-      // Wait for the stepper to actually stop before setting position
-      while (stepper.isRunning()) {
-        stepper.run();
-      }
-      
-      stepper.setCurrentPosition(0);
-      break;
-    }
-    stepper.run();
-  }
-
-  // If we didn't hit the home switch, we have a problem
-  if (homeSwitch.read() == LOW) {
-    // Serial.println("⚠ Failed to find home switch during initial homing!"); //
-    // DO NOT DELETE
-    logMessage("⚠ Failed to find home switch during initial homing!", "error");
-    currentState = SystemState::ERROR;
-    return;
-  }
-
-  // Now move to home offset with a gentler motion
-  logMessage("Moving to home offset position: " + String(Motion::HOME_OFFSET) + " inches");
-  stepper.setMaxSpeed(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
-  stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
-  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-  
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
-  
-  // Add settle time after reaching home offset
-  delay(Timing::HOME_SETTLE_TIME);
-  
-  logMessage("Home offset position reached. Current position: " + 
-             String(stepper.currentPosition() / Motion::STEPS_PER_INCH) + " inches");
-
-  // Now that we're at home position, release the clamps
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);
-  
-  // Add settle time after releasing clamps
-  delay(Timing::CLAMP_RELEASE_TIME);
-
-  isHomed = true;
-  // Serial.println("✅ Homing complete"); // DO NOT DELETE
-  logMessage("✅ Homing complete");
-}
-
-void engageClamps() {
-  digitalWrite(Pins::LEFT_CLAMP, LOW);
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);
-  delay(200);
-}
+// Homing sequence moved to StateMachine/STATES/00_HOMING.cpp
 
 void releaseClamps() {
   digitalWrite(Pins::LEFT_CLAMP, HIGH);
   digitalWrite(Pins::RIGHT_CLAMP, HIGH);
-  delay(200);
-}
-
-void staggeredReleaseClamps() {
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Release right clamp first
-  delay(200);
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);  // Release left clamp
   delay(200);
 }
 
@@ -301,7 +162,7 @@ void handleSerialCommand(const String &command) {
     printSystemStatus();
   } else if (command == "home") {
     logMessage("🏠 Initiating homing sequence via serial...");
-    performHomingSequence();
+    executeHomingState();
   } else if (command == "settings") {
     printCurrentSettings();
   } else if (command == "identify") {
@@ -607,10 +468,10 @@ void sendSerialMessage(const String &message) {
 void manualHome() {
   if (currentState == SystemState::READY) {
     logMessage("Initiating manual homing sequence...");
-    performHomingSequence();
+    executeHomingState();
     if (isHomed) {
       currentState = SystemState::READY;  // Should be set by
-                                          // performHomingSequence if successful
+                                          // executeHomingState if successful
       logMessage("Manual homing complete. System Ready.");
     } else {
       logMessage("Manual homing failed.", "error");
@@ -721,219 +582,6 @@ void updateTransferArmStartSignalDebouncer() {
 }
 
 void runCuttingCycle() {
-  // Reset analysis result tracking at the start of each cycle
-  lastDetectedClass = "";
-  analysisResultReceived = false;
-
-  // Initial left clamp pulse and alignment cylinder extension
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage (extend) left clamp
-
-  // Left clamp only extends for 300ms (200 ms + 100 ms delay)
-  delay(200);
-  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
-  delay(100);
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);      // Retract left clamp
-
-  // Alignment cylinder stays extended for the remainder of the time
-  delay(100);
-
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
-  delay(150);
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
-  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
-  delay(150);
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
-  delay(125);
-
-  // Engage clamps
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
-  delay(200);
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Extend left clamp
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
-
-  // Check camera signal using debounced value
-  if (cameraSignal.read() == HIGH) {
-    // Send burst request to camera system
-    sendSerialMessage("BURST");
-    inferenceStartTime = millis();
-    inferenceTimingActive = true;
-
-    // Wait for analysis result (max 2 seconds)
-    unsigned long startWaitTime = millis();
-    unsigned long waitTimeout = 2000;
-    logMessage("Waiting for wood analysis result...");
-
-    while (!analysisResultReceived && (millis() - startWaitTime < waitTimeout)) {
-      // Check for and process any available serial responses
-      if (Serial.available()) {
-        String response = Serial.readStringUntil('\n');
-        response.trim();
-        if (response.length() > 0 && response.startsWith("{")) {
-          handleSerialResponse(response);
-        }
-      }
-      delay(10);
-    }
-
-    // Handle timeout case for inference timing
-    if (!analysisResultReceived && inferenceTimingActive) {
-      unsigned long timeoutDuration = millis() - inferenceStartTime;
-      logMessage("Analysis timeout after " + String(timeoutDuration) + " ms", "warn");
-      inferenceTimingActive = false;
-    }
-
-    // Check if we received analysis result and it's "Empty"
-    if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("Empty")) {
-      logMessage("======= SHORT-CIRCUITING CYCLE =======");
-      logMessage("Empty wood detected - skipping cutting operations");
-      logMessage("========================================");
-
-      // Release clamps and return to home position
-      releaseClamps();
-
-      // Signal transfer arm to prevent Z-axis lowering during return
-      digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
-      logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
-
-      // Return directly to home
-      stepper.setMaxSpeed(Motion::RETURN_SPEED);
-      stepper.setAcceleration(Motion::RETURN_ACCEL);
-      stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-      while (stepper.distanceToGo() != 0) {
-        stepper.run();
-      }
-      
-      // Deactivate transfer arm signal - return is complete
-      digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
-      logMessage("Transfer arm signal deactivated (return complete)");
-
-      delay(50);
-      updateTransferArmStartSignalDebouncer();
-      logMessage("✅ Cycle short-circuited and completed!");
-      return;
-    }
-  } else {
-    logMessage("Camera not ready (signal LOW)");
-  }
-
-  // Approach phase
-  logMessage("🚀 Approach phase...");
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
-
-  // Cutting phase
-  logMessage("🔪 Cutting phase...");
-  stepper.setMaxSpeed(Motion::CUTTING_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL * 2);
-  stepper.moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
-
-  // Handle "End" class detection
-  if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
-    logMessage("======= END CLASS DETECTED =======");
-    float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
-    logMessage("Moving to intermediate position: " + String(intermediatePosition));
-
-    stepper.setMaxSpeed(Motion::FINISH_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
-    stepper.moveTo(intermediatePosition * Motion::STEPS_PER_INCH);
-    while (stepper.distanceToGo() != 0) {
-      stepper.run();
-    }
-    stepper.stop();
-    delay(Timing::MOTION_SETTLE_TIME);
-
-    logMessage("Deactivating left clamp...");
-    digitalWrite(Pins::LEFT_CLAMP, HIGH);  // Deactivate left clamp
-    delay(200);
-
-    logMessage("Proceeding to final forward distance.");
-    logMessage("==================================");
-  }
-
-  // Finish phase
-  logMessage("🏁 Finish phase...");
-  stepper.setMaxSpeed(Motion::FINISH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
-
-  stepper.stop();
-  delay(50);
-
-  // Release both clamps simultaneously
-  releaseClamps();
-  delay(100);
-
-  // Return phase
-  logMessage("🏠 Return to home phase...");
-  
-  // Signal transfer arm to prevent Z-axis lowering during return
-  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
-  logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
-
-  // Fast return to slow-down point
-  float currentPosition = stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
-  float slowDownPosition = currentPosition * 0.01;
-
-  stepper.setMaxSpeed(Motion::RETURN_SPEED);
-  stepper.setAcceleration(Motion::RETURN_ACCEL);
-  stepper.moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
-
-  unsigned long fastReturnStartTime = millis();
-  unsigned long fastReturnTimeout = 15000;
-
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-    if (millis() - fastReturnStartTime > fastReturnTimeout) {
-      logMessage("⚠ Fast return timeout - proceeding to slow approach...", "warn");
-      break;
-    }
-  }
-
-  // Slow approach to home position
-  float slowHomingSpeed = Motion::HOMING_SPEED / 2;
-  stepper.setMaxSpeed(slowHomingSpeed);
-  stepper.setAcceleration(Motion::RETURN_ACCEL / 4);
-  stepper.moveTo(0);
-
-  unsigned long slowApproachStartTime = millis();
-  unsigned long slowApproachTimeout = 20000;
-
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-    if (millis() - slowApproachStartTime > slowApproachTimeout) {
-      logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
-      break;
-    }
-  }
-
-  delay(30);
-
-  // Move to home offset
-  logMessage("Moving to home offset position...");
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
-  }
-  
-  // Deactivate transfer arm signal - return is complete
-  digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
-  logMessage("Transfer arm signal deactivated (return complete)");
-
-  delay(50);
-  updateTransferArmStartSignalDebouncer();
-
-  logMessage("✅ Cycle complete!");
+  // Execute the organized cutting cycle
+  executeCuttingCycle();
 }

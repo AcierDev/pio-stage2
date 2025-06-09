@@ -12,12 +12,10 @@
 // State enumeration
 enum CuttingCycleState {
     CYCLE_IDLE,
-    CYCLE_CLAMP,
-    CYCLE_ANALYSIS,
-    CYCLE_HOMING,
+    CYCLE_ALIGN,
     CYCLE_APPROACH,
     CYCLE_CUTTING,
-    CYCLE_FINISH,
+    CYCLE_DROP_OFF,
     CYCLE_RETURN,
     CYCLE_COMPLETE,
     CYCLE_ERROR
@@ -30,10 +28,10 @@ extern bool analysisResultReceived;
 
 // Function declarations
 void executeCuttingCycle();
+void executeCurrentCycleState();
+void transitionToNextCycleState();
 void initializeCuttingCycle();
-void updateCuttingCycleState();
 bool isCuttingCycleComplete();
 void resetCuttingCycle();
-void handleEmptyClassDetection();
 
 #endif // CUTTING_CYCLE_H 

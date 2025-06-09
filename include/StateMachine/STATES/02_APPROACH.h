@@ -15,6 +15,7 @@ extern AccelStepper stepper;
 
 // Function declarations
 void executeApproachState();
+void executeApproachMovement();
 bool isApproachComplete();
 void resetApproachState();
 
