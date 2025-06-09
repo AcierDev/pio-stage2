@@ -9,6 +9,7 @@
 #include "StateMachine/STATES/07_CUTTING_CYCLE.h"
 #include "StateMachine/FUNCTIONS/MotionControl.h"
 #include "StateMachine/FUNCTIONS/PneumaticControl.h"
+#include "OTA_Manager.h"
 
 // System state (defined in system_states.h)
 
@@ -70,6 +71,9 @@ void setup() {
   Serial.begin(SERIAL_BAUDRATE);
   logMessage("Serial initialized at " + String(SERIAL_BAUDRATE) + " baud.");
 
+  // Initialize OTA functionality
+  initOTA();
+
   // Initialize hardware and perform homing sequence
   initializeHardware();
   performHomingSequence();
@@ -80,6 +84,8 @@ void setup() {
 }
 
 void loop() {
+  // Handle OTA updates
+  handleOTA();
 
   // Handle serial communication
   if (Serial.available()) {
