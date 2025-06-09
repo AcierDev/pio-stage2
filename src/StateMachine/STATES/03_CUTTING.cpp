@@ -17,7 +17,7 @@ void executeCuttingState() {
 void executeCuttingMovement() {
     logMessage("🔪 Cutting phase...");
     stepper->setSpeedInHz(Motion::CUTTING_SPEED);
-    stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
     stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
     while (stepper->rampState() != RAMP_STATE_IDLE) {
         delay(1);  // Wait for stepper motor ramp to complete

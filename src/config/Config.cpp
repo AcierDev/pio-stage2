@@ -19,15 +19,15 @@ const float FORWARD_DISTANCE = 27.0f;  // Position value stays the same
 const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward distance
 
 // Speed Settings (steps/second)
-const float HOMING_SPEED = 2000;    // Reduced for reliable homing
+const float HOMING_SPEED = 1000;    // Reduced for reliable homing
 const float APPROACH_SPEED = 8000;    // Reduced from 14000 for stability  
-const float CUTTING_SPEED = 150;    // Doubled for better cutting motion
+const float CUTTING_SPEED = 70;    // Doubled for better cutting motion
 const float FINISH_SPEED = 10000;    // Reduced from 17000 for stability
 const float RETURN_SPEED = 12000;    // Different speed for return
 
 // Acceleration Settings (steps/second^2)
-const float FORWARD_ACCEL = 20000;  // Doubled for better responsiveness
-const float RETURN_ACCEL = 25000;   // Higher for return movement
+const float FORWARD_ACCEL = 10000;  // Doubled for better responsiveness
+const float RETURN_ACCEL = 10000;   // Higher for return movement
 }  // namespace Motion
 
 // Timing Settings (milliseconds)

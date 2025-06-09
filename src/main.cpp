@@ -689,21 +689,30 @@ void runCuttingCycle() {
 
   // Approach phase
   logMessage("🚀 Approach phase...");
+  logMessage("Moving to approach position: " + String(Motion::APPROACH_DISTANCE) + " inches");
   stepper->setSpeedInHz(Motion::APPROACH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
   stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
   while (stepper->rampState() != RAMP_STATE_IDLE) {
     delay(1);
   }
+  delay(Timing::MOTION_SETTLE_TIME);
+  logMessage("Approach phase complete. Current position: " + 
+             String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
 
   // Cutting phase
   logMessage("🔪 Cutting phase...");
+  float cuttingTargetPosition = Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE;
+  logMessage("Moving through cutting distance to: " + String(cuttingTargetPosition) + " inches");
   stepper->setSpeedInHz(Motion::CUTTING_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
-  stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
+  stepper->moveTo(cuttingTargetPosition * Motion::STEPS_PER_INCH);
   while (stepper->rampState() != RAMP_STATE_IDLE) {
     delay(1);
   }
+  delay(Timing::MOTION_SETTLE_TIME);
+  logMessage("Cutting phase complete. Current position: " + 
+             String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
 
   // Handle "End" class detection
   if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
@@ -751,43 +760,29 @@ void runCuttingCycle() {
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
   logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
 
-  // Fast return to slow-down point
+  // Direct return to home position (simplified for closed loop stepper)
   float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
-  float slowDownPosition = currentPosition * 0.01;
-
+  logMessage("Starting return from position: " + String(currentPosition) + " inches");
+  
   stepper->setSpeedInHz(Motion::RETURN_SPEED);
   stepper->setAcceleration(Motion::RETURN_ACCEL);
-  stepper->moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
+  stepper->moveTo(0);  // Return directly to 0 position
 
-  unsigned long fastReturnStartTime = millis();
-  unsigned long fastReturnTimeout = 15000;
+  unsigned long returnStartTime = millis();
+  unsigned long returnTimeout = 20000;
 
   while (stepper->rampState() != RAMP_STATE_IDLE) {
     delay(1);
-    if (millis() - fastReturnStartTime > fastReturnTimeout) {
-      logMessage("⚠ Fast return timeout - proceeding to slow approach...", "warn");
+    if (millis() - returnStartTime > returnTimeout) {
+      logMessage("⚠ Return movement timeout - stopping movement...", "warn");
+      stepper->forceStop();
       break;
     }
   }
 
-  // Slow approach to home position
-  float slowHomingSpeed = Motion::HOMING_SPEED / 2;
-  stepper->setSpeedInHz(slowHomingSpeed);
-  stepper->setAcceleration(Motion::RETURN_ACCEL / 4);
-  stepper->moveTo(0);
-
-  unsigned long slowApproachStartTime = millis();
-  unsigned long slowApproachTimeout = 20000;
-
-  while (stepper->rampState() != RAMP_STATE_IDLE) {
-    delay(1);
-    if (millis() - slowApproachStartTime > slowApproachTimeout) {
-      logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
-      break;
-    }
-  }
-
-  delay(30);
+  delay(Timing::MOTION_SETTLE_TIME);
+  logMessage("Return to 0 complete. Current position: " + 
+             String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
 
   // Move to home offset
   logMessage("Moving to home offset position...");

@@ -42,7 +42,7 @@ void initializeHardware() {
 
     // Setup debouncing
     homeSwitch.attach(Pins::HOME_SWITCH);
-    homeSwitch.interval(10);
+    homeSwitch.interval(3);
     startButton.attach(Pins::START_BUTTON);
     startButton.interval(20);
     transferArmStartSignal.attach(Pins::TRANSFER_ARM_START_SIGNAL);
