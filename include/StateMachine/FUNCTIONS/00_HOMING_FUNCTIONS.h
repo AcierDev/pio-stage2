@@ -1,7 +1,7 @@
 #ifndef HOMING_FUNCTIONS_H
 #define HOMING_FUNCTIONS_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // including motion control, position establishment, and sequence execution
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 
 // Function declarations
 void initializeHomingSequence();

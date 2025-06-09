@@ -16,21 +16,21 @@ void executeCuttingState() {
 
 void executeCuttingMovement() {
     logMessage("🔪 Cutting phase...");
-    stepper.setMaxSpeed(Motion::CUTTING_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL * 2);
-    stepper.moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    stepper->setSpeedInHz(Motion::CUTTING_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
+    stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
     }
     logMessage("✅ Cutting phase complete");
 }
 
 bool isCuttingComplete() {
     //! Check if cutting sequence is complete
-    return !stepper.isRunning();
+    return stepper->rampState() == RAMP_STATE_IDLE;
 }
 
 void resetCuttingState() {
     //! Reset cutting state to initial conditions
-    stepper.stop();
+    stepper->forceStop();
 } 

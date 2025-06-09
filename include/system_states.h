@@ -1,6 +1,6 @@
 #pragma once
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Bounce2.h>
@@ -18,7 +18,8 @@ enum class SystemState {
 };
 
 // Global objects declarations
-extern AccelStepper stepper;
+extern FastAccelStepperEngine engine;
+extern FastAccelStepper* stepper;
 extern Bounce homeSwitch;
 extern Bounce startButton;
 extern Bounce transferArmStartSignal;

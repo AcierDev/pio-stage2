@@ -1,4 +1,4 @@
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Bounce2.h>
@@ -16,7 +16,8 @@
 // System state (defined in system_states.h)
 
 // Global objects
-AccelStepper stepper(AccelStepper::DRIVER, Pins::STEP, Pins::DIR);
+FastAccelStepperEngine engine = FastAccelStepperEngine();
+FastAccelStepper* stepper = NULL;
 Bounce homeSwitch = Bounce();
 Bounce startButton = Bounce();
 Bounce transferArmStartSignal = Bounce();  // Transfer arm start signal
@@ -224,7 +225,7 @@ void printSystemStatus() {
   // Serial.print(stepper.currentPosition() / Motion::STEPS_PER_INCH); // DO NOT
   // DELETE Serial.println(" inches"); // DO NOT DELETE
   logMessage("Position: " +
-                 String(stepper.currentPosition() / Motion::STEPS_PER_INCH) +
+                 String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) +
                  " inches",
              "info", true);
 
@@ -499,7 +500,7 @@ void manualJog(bool jogLeft, float distance) {
     logMessage("Manual jog: " + String(jogLeft ? "LEFT" : "RIGHT") + " by " +
                String(distance) + " inches.");
     float currentPosInches =
-        stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
+        stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
     float targetPosInches;
     if (jogLeft) {
       targetPosInches = currentPosInches - distance;
@@ -521,7 +522,7 @@ void manualJog(bool jogLeft, float distance) {
                           Motion::FORWARD_ACCEL / 2);
     logMessage(
         "Jog complete. Current position: " +
-        String(stepper.currentPosition() / (float)Motion::STEPS_PER_INCH));
+        String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH));
   } else {
     logMessage("Cannot jog: System not in READY state.", "warn");
   }

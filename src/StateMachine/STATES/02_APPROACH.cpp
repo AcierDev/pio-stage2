@@ -16,21 +16,21 @@ void executeApproachState() {
 
 void executeApproachMovement() {
     logMessage("🚀 Approach phase...");
-    stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
-    stepper.moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    stepper->setSpeedInHz(Motion::APPROACH_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
+    stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
     }
     logMessage("✅ Approach phase complete");
 }
 
 bool isApproachComplete() {
     //! Check if approach sequence is complete
-    return !stepper.isRunning();
+    return stepper->rampState() == RAMP_STATE_IDLE;
 }
 
 void resetApproachState() {
     //! Reset approach state to initial conditions
-    stepper.stop();
+    stepper->forceStop();
 } 

@@ -1,7 +1,7 @@
 #ifndef RETURN_H
 #define RETURN_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // to the home position after completing the cutting operation
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 
 // Function declarations
 void executeReturnState();

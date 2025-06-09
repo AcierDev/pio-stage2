@@ -1,7 +1,7 @@
 #ifndef DROP_OFF_H
 #define DROP_OFF_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // and position the stepper at the forward position for piece drop off
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 extern String lastDetectedClass;
 extern bool analysisResultReceived;
 

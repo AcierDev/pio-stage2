@@ -50,14 +50,24 @@ void initializeHardware() {
     cameraSignal.attach(Pins::CAMERA_SIGNAL);
     cameraSignal.interval(20);  // Debounce camera signal
 
-    // Initialize stepper
-    digitalWrite(Pins::ENABLE, HIGH);  // Disable briefly
-    delay(100);                        // Wait 1 second for motor to reset
-    digitalWrite(Pins::ENABLE, LOW);   // Enable
-    delay(50);                         // Wait for enable to take effect
-
-    stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
+    // Initialize FastAccelStepper engine
+    engine.init();
+    
+    // Create stepper instance
+    stepper = engine.stepperConnectToPin(Pins::STEP);
+    if (stepper) {
+        stepper->setDirectionPin(Pins::DIR);
+        stepper->setEnablePin(Pins::ENABLE);
+        stepper->setAutoEnable(true);
+        
+        // Set default speed and acceleration
+        stepper->setSpeedInHz(Motion::APPROACH_SPEED);
+        stepper->setAcceleration(Motion::FORWARD_ACCEL);
+        
+        logMessage("✅ FastAccelStepper initialized successfully");
+    } else {
+        logMessage("❌ Failed to initialize FastAccelStepper!", "error");
+    }
 }
 
 bool isInitializationComplete() {

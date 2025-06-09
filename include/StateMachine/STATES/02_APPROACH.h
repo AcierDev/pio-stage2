@@ -1,7 +1,7 @@
 #ifndef APPROACH_H
 #define APPROACH_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // at the cutting start position before beginning the cutting operation
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 
 // Function declarations
 void executeApproachState();

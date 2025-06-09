@@ -22,18 +22,18 @@ void executeReturnMovement() {
     logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
 
     // Fast return to slow-down point
-    float currentPosition = stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
-    float slowDownPosition = currentPosition * 0.01;
+    float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
+    float slowDownPosition = currentPosition * 0.05;
 
-    stepper.setMaxSpeed(Motion::RETURN_SPEED);
-    stepper.setAcceleration(Motion::RETURN_ACCEL);
-    stepper.moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
+    stepper->setSpeedInHz(Motion::RETURN_SPEED);
+    stepper->setAcceleration(Motion::RETURN_ACCEL);
+    stepper->moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
 
     unsigned long fastReturnStartTime = millis();
     unsigned long fastReturnTimeout = 15000;
 
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
         if (millis() - fastReturnStartTime > fastReturnTimeout) {
             logMessage("⚠ Fast return timeout - proceeding to slow approach...", "warn");
             break;
@@ -42,30 +42,26 @@ void executeReturnMovement() {
 
     // Slow approach to home position with home switch detection
     float slowHomingSpeed = Motion::HOMING_SPEED / 2;
-    stepper.setMaxSpeed(slowHomingSpeed);
-    stepper.setAcceleration(Motion::RETURN_ACCEL / 4);
-    stepper.moveTo(-1000);  // Move towards home switch
+    stepper->setSpeedInHz(slowHomingSpeed);
+    stepper->setAcceleration(Motion::RETURN_ACCEL / 4);
+    stepper->moveTo(-1000);  // Move towards home switch
 
     unsigned long slowApproachStartTime = millis();
     unsigned long slowApproachTimeout = 20000;
     bool homeFound = false;
 
     logMessage("Slow approach to home switch...");
-    while (stepper.distanceToGo() != 0) {
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
         homeSwitch.update();
         
         if (homeSwitch.read() == HIGH) {
-            stepper.stop();
-            while (stepper.isRunning()) {
-                stepper.run();
-            }
-            stepper.setCurrentPosition(0);  // Reset position when home switch triggers
+            stepper->forceStopAndNewPosition(0);  // Reset position when home switch triggers
             homeFound = true;
             logMessage("Home switch found during return. Position reset to 0.");
             break;
         }
         
-        stepper.run();
+        delay(1);  // Small delay to prevent excessive CPU usage
         if (millis() - slowApproachStartTime > slowApproachTimeout) {
             logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
             break;
@@ -80,16 +76,16 @@ void executeReturnMovement() {
 
     // Move to home offset
     logMessage("Moving to home offset position: " + String(Motion::HOME_OFFSET) + " inches");
-    logMessage("Current position before offset move: " + String(stepper.currentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
+    logMessage("Current position before offset move: " + String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
     
-    stepper.setMaxSpeed(Motion::APPROACH_SPEED / 2);  // Use slower speed for offset move
-    stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);
-    stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    stepper->setSpeedInHz(Motion::APPROACH_SPEED / 2);  // Use slower speed for offset move
+    stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);
+    stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
     }
     
-    logMessage("Final position after offset move: " + String(stepper.currentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
+    logMessage("Final position after offset move: " + String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
     
     // Deactivate transfer arm signal - return is complete
     digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
@@ -109,29 +105,25 @@ void executeEmptyClassReturn() {
     logMessage("Transfer arm signal activated (preventing Z-axis lowering)");
 
     // Return directly to home switch first, then to offset
-    stepper.setMaxSpeed(Motion::RETURN_SPEED);
-    stepper.setAcceleration(Motion::RETURN_ACCEL);
-    stepper.moveTo(-1000);  // Move towards home switch
+    stepper->setSpeedInHz(Motion::RETURN_SPEED);
+    stepper->setAcceleration(Motion::RETURN_ACCEL);
+    stepper->moveTo(-1000);  // Move towards home switch
     
     bool homeFound = false;
     unsigned long emptyReturnStart = millis();
     unsigned long emptyReturnTimeout = 15000;
     
-    while (stepper.distanceToGo() != 0) {
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
         homeSwitch.update();
         
         if (homeSwitch.read() == HIGH) {
-            stepper.stop();
-            while (stepper.isRunning()) {
-                stepper.run();
-            }
-            stepper.setCurrentPosition(0);
+            stepper->forceStopAndNewPosition(0);
             homeFound = true;
             logMessage("Home switch found during empty return.");
             break;
         }
         
-        stepper.run();
+        delay(1);  // Small delay to prevent excessive CPU usage
         if (millis() - emptyReturnStart > emptyReturnTimeout) {
             logMessage("⚠ Empty return timeout", "warn");
             break;
@@ -141,13 +133,13 @@ void executeEmptyClassReturn() {
     if (homeFound) {
         // Move to home offset
         logMessage("Moving to home offset after empty return...");
-        stepper.setMaxSpeed(Motion::APPROACH_SPEED / 2);
-        stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);
-        stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-        while (stepper.distanceToGo() != 0) {
-            stepper.run();
+        stepper->setSpeedInHz(Motion::APPROACH_SPEED / 2);
+        stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);
+        stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+        while (stepper->rampState() != RAMP_STATE_IDLE) {
+            delay(1);  // Small delay to prevent excessive CPU usage
         }
-        logMessage("Empty return complete at offset position: " + String(stepper.currentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
+        logMessage("Empty return complete at offset position: " + String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
     }
     
     // Deactivate transfer arm signal - return is complete
@@ -161,10 +153,10 @@ void executeEmptyClassReturn() {
 
 bool isReturnComplete() {
     //! Check if return sequence is complete
-    return !stepper.isRunning();
+    return stepper->rampState() == RAMP_STATE_IDLE;
 }
 
 void resetReturnState() {
     //! Reset return state to initial conditions
-    stepper.stop();
+    stepper->forceStop();
 } 

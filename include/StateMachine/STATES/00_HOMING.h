@@ -1,7 +1,7 @@
 #ifndef HOMING_H
 #define HOMING_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // for the stepper motor before starting cutting operations
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 
 // Function declarations
 void executeHomingState();

@@ -12,14 +12,14 @@
 void initializeHomingSequence() {
     //! Initialize homing sequence parameters
     setupHomingParameters();
-    stepper.setCurrentPosition(0);
+    stepper->setCurrentPosition(0);
 }
 
 void executeHomingMovement() {
     //! Execute the main homing movement
-    stepper.setMaxSpeed(Motion::HOMING_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
-    stepper.moveTo(0);
+    stepper->setSpeedInHz(Motion::HOMING_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
+    stepper->moveTo(0);
     
     waitForHomingComplete();
 }
@@ -31,8 +31,8 @@ void moveToHomeOffset() {
 
 void waitForHomingComplete() {
     //! Wait for homing movement to complete
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
     }
     delay(Timing::MOTION_SETTLE_TIME);
 }
@@ -44,6 +44,6 @@ void validateHomingPosition() {
 
 void setupHomingParameters() {
     //! Setup parameters for homing sequence
-    stepper.setMaxSpeed(Motion::HOMING_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
+    stepper->setSpeedInHz(Motion::HOMING_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
 } 

@@ -18,13 +18,13 @@ void executeDropOffState() {
 
 void executeDropOffMovement() {
     logMessage("🏁 Drop off phase...");
-    stepper.setMaxSpeed(Motion::FINISH_SPEED);
-    stepper.setAcceleration(Motion::FORWARD_ACCEL);
-    stepper.moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
-    while (stepper.distanceToGo() != 0) {
-        stepper.run();
+    stepper->setSpeedInHz(Motion::FINISH_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
+    stepper->moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
+    while (stepper->rampState() != RAMP_STATE_IDLE) {
+        delay(1);  // Small delay to prevent excessive CPU usage
     }
-    stepper.stop();
+    stepper->forceStop();
     delay(50);
     logMessage("✅ Drop off phase complete");
 }
@@ -36,13 +36,13 @@ void handleEndClassDetection() {
         float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
         logMessage("Moving to intermediate position: " + String(intermediatePosition));
 
-        stepper.setMaxSpeed(Motion::FINISH_SPEED);
-        stepper.setAcceleration(Motion::FORWARD_ACCEL);
-        stepper.moveTo(intermediatePosition * Motion::STEPS_PER_INCH);
-        while (stepper.distanceToGo() != 0) {
-            stepper.run();
+        stepper->setSpeedInHz(Motion::FINISH_SPEED);
+        stepper->setAcceleration(Motion::FORWARD_ACCEL);
+        stepper->moveTo(intermediatePosition * Motion::STEPS_PER_INCH);
+        while (stepper->rampState() != RAMP_STATE_IDLE) {
+            delay(1);  // Small delay to prevent excessive CPU usage
         }
-        stepper.stop();
+        stepper->forceStop();
         delay(Timing::MOTION_SETTLE_TIME);
 
         logMessage("Deactivating left clamp...");
@@ -58,10 +58,10 @@ void handleEndClassDetection() {
 
 bool isDropOffComplete() {
     //! Check if drop off sequence is complete
-    return !stepper.isRunning();
+    return stepper->rampState() == RAMP_STATE_IDLE;
 }
 
 void resetDropOffState() {
     //! Reset drop off state to initial conditions
-    stepper.stop();
+    stepper->forceStop();
 } 

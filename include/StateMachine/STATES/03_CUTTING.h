@@ -1,7 +1,7 @@
 #ifndef CUTTING_H
 #define CUTTING_H
 
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 
 //* ************************************************************************
@@ -11,7 +11,7 @@
 // slowly through the material to perform the actual cutting operation
 
 // Forward declarations
-extern AccelStepper stepper;
+extern FastAccelStepper* stepper;
 
 // Function declarations
 void executeCuttingState();
