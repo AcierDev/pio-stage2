@@ -22,7 +22,7 @@ void executeDropOffMovement() {
     stepper->setAcceleration(Motion::FORWARD_ACCEL);
     stepper->moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     stepper->forceStop();
     delay(50);
@@ -40,7 +40,7 @@ void handleEndClassDetection() {
         stepper->setAcceleration(Motion::FORWARD_ACCEL);
         stepper->moveTo(intermediatePosition * Motion::STEPS_PER_INCH);
         while (stepper->rampState() != RAMP_STATE_IDLE) {
-            delay(1);  // Small delay to prevent excessive CPU usage
+            delay(1);  // Wait for stepper motor ramp to complete
         }
         stepper->forceStop();
         delay(Timing::MOTION_SETTLE_TIME);
@@ -57,7 +57,7 @@ void handleEndClassDetection() {
 // releaseClamps() function is defined in main.cpp
 
 bool isDropOffComplete() {
-    //! Check if drop off sequence is complete
+    //! Check if drop off sequence is complete (motor ramp idle)
     return stepper->rampState() == RAMP_STATE_IDLE;
 }
 

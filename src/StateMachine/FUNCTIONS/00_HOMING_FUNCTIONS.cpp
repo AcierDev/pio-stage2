@@ -32,7 +32,7 @@ void moveToHomeOffset() {
 void waitForHomingComplete() {
     //! Wait for homing movement to complete
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     delay(Timing::MOTION_SETTLE_TIME);
 }

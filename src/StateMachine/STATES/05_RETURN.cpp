@@ -33,7 +33,7 @@ void executeReturnMovement() {
     unsigned long fastReturnTimeout = 15000;
 
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - fastReturnStartTime > fastReturnTimeout) {
             logMessage("⚠ Fast return timeout - proceeding to slow approach...", "warn");
             break;
@@ -61,7 +61,7 @@ void executeReturnMovement() {
             break;
         }
         
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - slowApproachStartTime > slowApproachTimeout) {
             logMessage("⚠ Slow approach timeout - stopping movement...", "warn");
             break;
@@ -82,7 +82,7 @@ void executeReturnMovement() {
     stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);
     stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     
     logMessage("Final position after offset move: " + String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
@@ -123,7 +123,7 @@ void executeEmptyClassReturn() {
             break;
         }
         
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - emptyReturnStart > emptyReturnTimeout) {
             logMessage("⚠ Empty return timeout", "warn");
             break;
@@ -137,7 +137,7 @@ void executeEmptyClassReturn() {
         stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);
         stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
         while (stepper->rampState() != RAMP_STATE_IDLE) {
-            delay(1);  // Small delay to prevent excessive CPU usage
+            delay(1);  // Wait for stepper motor ramp to complete
         }
         logMessage("Empty return complete at offset position: " + String(stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH) + " inches");
     }
@@ -152,7 +152,7 @@ void executeEmptyClassReturn() {
 }
 
 bool isReturnComplete() {
-    //! Check if return sequence is complete
+    //! Check if return sequence is complete (motor ramp idle)
     return stepper->rampState() == RAMP_STATE_IDLE;
 }
 

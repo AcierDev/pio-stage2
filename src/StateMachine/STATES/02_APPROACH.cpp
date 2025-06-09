@@ -20,13 +20,13 @@ void executeApproachMovement() {
     stepper->setAcceleration(Motion::FORWARD_ACCEL);
     stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     logMessage("✅ Approach phase complete");
 }
 
 bool isApproachComplete() {
-    //! Check if approach sequence is complete
+    //! Check if approach sequence is complete (motor ramp idle)
     return stepper->rampState() == RAMP_STATE_IDLE;
 }
 

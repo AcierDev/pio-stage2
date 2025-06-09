@@ -20,13 +20,13 @@ void executeCuttingMovement() {
     stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
     stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     logMessage("✅ Cutting phase complete");
 }
 
 bool isCuttingComplete() {
-    //! Check if cutting sequence is complete
+    //! Check if cutting sequence is complete (motor ramp idle)
     return stepper->rampState() == RAMP_STATE_IDLE;
 }
 

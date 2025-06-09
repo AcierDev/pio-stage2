@@ -45,7 +45,7 @@ void performHomingSequence() {
             stepper->forceStopAndNewPosition(0);
             break;
         }
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
 
     // If we didn't hit the home switch, we have a problem
@@ -62,7 +62,7 @@ void performHomingSequence() {
     stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
     
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     
     // Add settle time after reaching home offset

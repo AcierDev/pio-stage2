@@ -23,7 +23,7 @@ void moveToApproachPosition() {
 void waitForApproachComplete() {
     //! Wait for approach movement to complete
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     delay(Timing::MOTION_SETTLE_TIME);
 }
@@ -37,7 +37,7 @@ void moveThroughCuttingDistance() {
 void waitForCuttingComplete() {
     //! Wait for cutting movement to complete
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     delay(Timing::MOTION_SETTLE_TIME);
 }
@@ -55,7 +55,7 @@ void executeFastReturn() {
     unsigned long fastReturnTimeout = 15000;
 
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - fastReturnStartTime > fastReturnTimeout) {
             break;
         }
@@ -73,7 +73,7 @@ void executeSlowApproach() {
     unsigned long slowApproachTimeout = 20000;
 
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
         if (millis() - slowApproachStartTime > slowApproachTimeout) {
             break;
         }
@@ -118,7 +118,7 @@ void moveToForwardPosition() {
 void waitForFinishComplete() {
     //! Wait for finish movement to complete
     while (stepper->rampState() != RAMP_STATE_IDLE) {
-        delay(1);  // Small delay to prevent excessive CPU usage
+        delay(1);  // Wait for stepper motor ramp to complete
     }
     delay(50);
 }
