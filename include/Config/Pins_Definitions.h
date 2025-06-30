@@ -1,6 +1,6 @@
 #pragma once
 
-// Pin Configuration - Using ESP32 GPIO pins
+// Pin Configuration - Using ESP32-S3 GPIO pins (Freenove ESP32-S3 board)
 namespace Pins {
 // Input pins
 extern const int HOME_SWITCH;
