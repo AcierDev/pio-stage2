@@ -499,22 +499,41 @@ void runCuttingCycle() {
   digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
 
   // Approach phase
+  Serial.println("=== APPROACH PHASE ===");
+  float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+  float approachTarget = Motion::APPROACH_DISTANCE;
+  Serial.println("Current position: " + String(currentPos) + " inches");
+  Serial.println("Approach target: " + String(approachTarget) + " inches");
+  Serial.println("Movement distance: " + String(approachTarget - currentPos) + " inches");
+  
   stepper->setSpeedInHz(Motion::APPROACH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
   stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
   while (stepper->isRunning()) {
     delay(1);
   }
+  Serial.println("Approach complete. New position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   // Cutting phase
+  Serial.println("=== CUTTING PHASE ===");
+  float cuttingTarget = Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE;
+  Serial.println("Cutting target: " + String(cuttingTarget) + " inches");
+  Serial.println("Cutting distance: " + String(Motion::CUTTING_DISTANCE) + " inches");
+  
   stepper->setSpeedInHz(Motion::CUTTING_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);  // Removed * 2 multiplier to prevent stalling
   stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
   while (stepper->isRunning()) {
     delay(1);
   }
+  Serial.println("Cutting complete. New position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   // Finish phase
+  Serial.println("=== FINISH PHASE ===");
+  float finishTarget = Motion::FORWARD_DISTANCE;
+  Serial.println("Finish target: " + String(finishTarget) + " inches");
+  Serial.println("Finish distance: " + String(finishTarget - (Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE)) + " inches");
+  
   stepper->setSpeedInHz(Motion::FINISH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
   stepper->moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
@@ -530,12 +549,17 @@ void runCuttingCycle() {
   delay(100);
 
   // Return phase
+  Serial.println("=== RETURN PHASE ===");
   // Signal transfer arm to prevent Z-axis lowering during return
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
 
   // Fast return to slow-down point
   float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
   float slowDownPosition = currentPosition * 0.05;  // Changed from 0.01 to 0.05 for more reasonable slowdown
+  
+  Serial.println("Current position: " + String(currentPosition) + " inches");
+  Serial.println("Slowdown position: " + String(slowDownPosition) + " inches");
+  Serial.println("Fast return distance: " + String(currentPosition - slowDownPosition) + " inches");
 
   stepper->setSpeedInHz(Motion::RETURN_SPEED);
   stepper->setAcceleration(Motion::RETURN_ACCEL);
@@ -547,12 +571,15 @@ void runCuttingCycle() {
   while (stepper->isRunning()) {
     if (millis() - fastReturnStartTime > fastReturnTimeout) {
       stepper->forceStop();
+      Serial.println("Fast return TIMEOUT!");
       break;
     }
     delay(1);
   }
+  Serial.println("Fast return complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   // Slow approach to home position
+  Serial.println("=== SLOW RETURN TO HOME ===");
   float slowHomingSpeed = Motion::HOMING_SPEED / 2;
   stepper->setSpeedInHz(slowHomingSpeed);
   stepper->setAcceleration(Motion::RETURN_ACCEL / 4);
@@ -564,23 +591,29 @@ void runCuttingCycle() {
   while (stepper->isRunning()) {
     if (millis() - slowApproachStartTime > slowApproachTimeout) {
       stepper->forceStop();
+      Serial.println("Slow return TIMEOUT!");
       break;
     }
     delay(1);
   }
+  Serial.println("Slow return complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   delay(30);
 
   // Move to home offset
+  Serial.println("=== MOVE TO HOME OFFSET ===");
+  Serial.println("Home offset target: " + String(Motion::HOME_OFFSET) + " inches");
   stepper->setSpeedInHz(Motion::APPROACH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
   stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
   while (stepper->isRunning()) {
     delay(1);
   }
+  Serial.println("Home offset complete. Final position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
   
   // Deactivate transfer arm signal - return is complete
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
+  Serial.println("=== CUTTING CYCLE COMPLETE ===");
 
   delay(50);
   updateTransferArmStartSignalDebouncer();
