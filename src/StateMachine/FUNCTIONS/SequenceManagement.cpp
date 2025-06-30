@@ -91,8 +91,8 @@ void executeFinishMovement() {
 void handleEndClassDetection() {
     //! Handle "End" class detection with intermediate positioning
     if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
-        float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
-        moveStepperToPosition(intermediatePosition, Motion::FINISH_SPEED, Motion::FORWARD_ACCEL);
+        // Move directly to forward position for end pieces
+        moveStepperToPosition(Motion::FORWARD_DISTANCE, Motion::FINISH_SPEED, Motion::FORWARD_ACCEL);
         if (stepper) {
             stepper->forceStop();
         }

@@ -13,21 +13,20 @@ const char *BOARD_DESCRIPTION = "Stage 2 Cutting Controller";
 namespace Motion {
 const float STEPS_PER_INCH = 42.33f;   // 200 steps/rev ÷ (60 teeth × 2mm ÷ 25.4mm/inch) = 42.33 steps/inch
 const float HOME_OFFSET = 0.9f;  // Position value stays the same
-const float APPROACH_DISTANCE = 20.0f;  // Position value stays the same
+const float APPROACH_DISTANCE = 5.0f;  // Position value stays the same
 const float CUTTING_DISTANCE = 7.3f;   // Position value stays the same
 const float FORWARD_DISTANCE = 26.8f;  // Position value stays the same
-const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward distance
 
-// Speed Settings (steps/second)
-const float HOMING_SPEED = 1000;       // 23.6 IPS with new steps/inch calculation
-const float APPROACH_SPEED = 12000;    // 283.5 IPS - back to original speed
-const float CUTTING_SPEED = 85;        // 2.0 IPS - keep slow for cutting
-const float FINISH_SPEED = 14000;      // 330.7 IPS - back to higher speed
-const float RETURN_SPEED = 14000;      // 330.7 IPS - back to higher speed
+// Speed Settings (steps/second) - Fixed for 42.33 steps/inch
+const float HOMING_SPEED = 423;         // ~10 IPS (42.33 * 10)
+const float APPROACH_SPEED = 1270;      // ~30 IPS (42.33 * 30) - much more reasonable
+const float CUTTING_SPEED = 85;         // ~2 IPS - keep slow for cutting
+const float FINISH_SPEED = 2115;        // ~50 IPS (42.33 * 50)
+const float RETURN_SPEED = 2115;        // ~50 IPS (42.33 * 50)
 
-// Acceleration Settings (steps/second^2)
-const float FORWARD_ACCEL = 6000;      // Reduced from 10000 to prevent stalling
-const float RETURN_ACCEL = 6000;       // Reduced from 10000 to prevent stalling
+// Acceleration Settings (steps/second^2) - Fixed for 42.33 steps/inch
+const float FORWARD_ACCEL = 2115;       // ~50 IPS^2 (42.33 * 50)
+const float RETURN_ACCEL = 2115;        // ~50 IPS^2 (42.33 * 50)
 }  // namespace Motion
 
 // Timing Settings (milliseconds)

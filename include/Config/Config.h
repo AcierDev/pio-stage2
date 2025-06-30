@@ -16,7 +16,6 @@ extern const float HOME_OFFSET;  // Position value stays the same
 extern const float APPROACH_DISTANCE;  // Position value stays the same
 extern const float CUTTING_DISTANCE;   // Position value stays the same
 extern const float FORWARD_DISTANCE;  // Position value stays the same
-extern const float END_DROP_DISTANCE_OFFSET;  // Distance before the forward distance
 
 // Speed Settings (inches/second)
 extern const float HOMING_SPEED_IPS;  // 750 steps/sec ÷ 32 steps/inch
