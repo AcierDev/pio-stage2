@@ -89,37 +89,81 @@ bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acce
 //* ************************ CLAMP CONTROL FUNCTIONS ***************************
 //* ************************************************************************
 
+//! ************************************************************************
+//! CYLINDER CONTROL HELPER FUNCTIONS
+//! ************************************************************************
+// These functions provide clear, readable control of cylinder movements
+// Left/Right cylinders: HIGH = retracted, LOW = extended
+// Align cylinder: HIGH = extended, LOW = retracted
+
+void extendLeftClamp() {
+  //! Extend the left clamp cylinder (LOW signal)
+  digitalWrite(Pins::LEFT_CLAMP, LOW);
+}
+
+void retractLeftClamp() {
+  //! Retract the left clamp cylinder (HIGH signal)
+  digitalWrite(Pins::LEFT_CLAMP, HIGH);
+}
+
+void extendRightClamp() {
+  //! Extend the right clamp cylinder (LOW signal)
+  digitalWrite(Pins::RIGHT_CLAMP, LOW);
+}
+
+void retractRightClamp() {
+  //! Retract the right clamp cylinder (HIGH signal)
+  digitalWrite(Pins::RIGHT_CLAMP, HIGH);
+}
+
+void extendAlignCylinder() {
+  //! Extend the alignment cylinder (HIGH signal)
+  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);
+}
+
+void retractAlignCylinder() {
+  //! Retract the alignment cylinder (LOW signal)
+  digitalWrite(Pins::ALIGN_CYLINDER, LOW);
+}
+
 void executeClampSequence() {
   //! Execute the complete clamp sequence for material alignment
   
-  // Initial left clamp pulse and alignment cylinder extension
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage (extend) left clamp
+  //! ************************************************************************
+  //! STEP 1: INITIAL LEFT CLAMP PULSE AND ALIGNMENT
+  //! ************************************************************************
+  extendLeftClamp();        // Extend left clamp to secure material
   delay(200);
-  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
+  extendAlignCylinder();    // Extend alignment cylinder for positioning
   delay(100);
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);      // Retract left clamp
+  retractLeftClamp();       // Retract left clamp to allow adjustment
   delay(100);
 
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
+  //! ************************************************************************
+  //! STEP 2: RIGHT CLAMP SEQUENCE WITH ALIGNMENT
+  //! ************************************************************************
+  retractAlignCylinder();   // Retract alignment cylinder
+  extendRightClamp();       // Extend right clamp
   delay(150);
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
-  digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
+  retractRightClamp();      // Retract right clamp
+  extendAlignCylinder();    // Extend alignment cylinder again
   delay(150);
-  digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
+  retractAlignCylinder();   // Final retraction of alignment cylinder
   delay(125);
 
-  // Engage both clamps for cutting
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
+  //! ************************************************************************
+  //! STEP 3: FINAL CLAMP ENGAGEMENT FOR CUTTING
+  //! ************************************************************************
+  retractRightClamp();      // Ensure right clamp is retracted
   delay(200);
-  digitalWrite(Pins::LEFT_CLAMP, LOW);  // Extend left clamp
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
+  extendLeftClamp();        // Extend left clamp for cutting
+  extendRightClamp();       // Extend right clamp for cutting
 }
 
 void releaseClamps() {
   //! Release both clamps simultaneously
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);   // Release left clamp
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Release right clamp
+  retractLeftClamp();       // Release left clamp
+  retractRightClamp();      // Release right clamp
 }
 
 void updateTransferArmStartSignalDebouncer() {
