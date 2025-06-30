@@ -19,10 +19,12 @@ void executeFinishState() {
 
 bool isFinishComplete() {
     //! Check if finish sequence is complete
-    return !stepper.isRunning();
+    return stepper ? !stepper->isRunning() : true;
 }
 
 void resetFinishState() {
     //! Reset finish state to initial conditions
-    stepper.stop();
+    if (stepper) {
+        stepper->forceStop();
+    }
 } 

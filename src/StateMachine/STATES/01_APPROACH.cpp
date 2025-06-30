@@ -18,10 +18,12 @@ void executeApproachState() {
 
 bool isApproachComplete() {
     //! Check if approach sequence is complete
-    return !stepper.isRunning();
+    return stepper ? !stepper->isRunning() : true;
 }
 
 void resetApproachState() {
     //! Reset approach state to initial conditions
-    stepper.stop();
+    if (stepper) {
+        stepper->forceStop();
+    }
 } 

@@ -24,10 +24,12 @@ void executeReturnState() {
 
 bool isReturnComplete() {
     //! Check if return sequence is complete
-    return !stepper.isRunning();
+    return stepper ? !stepper->isRunning() : true;
 }
 
 void resetReturnState() {
     //! Reset return state to initial conditions
-    stepper.stop();
+    if (stepper) {
+        stepper->forceStop();
+    }
 } 

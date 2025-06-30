@@ -1,21 +1,14 @@
-#ifndef HOMING_H
-#define HOMING_H
+#pragma once
 
-#include <AccelStepper.h>
-#include <Arduino.h>
+#include "system_states.h"
 
 //* ************************************************************************
 //* ************************ HOMING ***************************
 //* ************************************************************************
-// This state handles the homing sequence to establish reference position
-// for the stepper motor before starting cutting operations
-
-// Forward declarations
-extern AccelStepper stepper;
+// This state handles the homing sequence for the stepper motor,
+// establishing the zero position and moving to the home offset
 
 // Function declarations
 void executeHomingState();
 bool isHomingComplete();
-void resetHomingState();
-
-#endif // HOMING_H 
+void resetHomingState(); 

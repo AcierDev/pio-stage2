@@ -18,11 +18,13 @@ void executeHomingState() {
 
 bool isHomingComplete() {
     //! Check if homing sequence is complete
-    return !stepper.isRunning();
+    return stepper ? !stepper->isRunning() : true;
 }
 
 void resetHomingState() {
     //! Reset homing state to initial conditions
-    stepper.stop();
-    stepper.setCurrentPosition(0);
+    if (stepper) {
+        stepper->forceStop();
+        stepper->forceStopAndNewPosition(0);
+    }
 } 

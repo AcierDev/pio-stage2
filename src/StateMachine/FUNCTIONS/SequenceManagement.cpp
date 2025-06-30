@@ -93,7 +93,9 @@ void handleEndClassDetection() {
     if (analysisResultReceived && lastDetectedClass.equalsIgnoreCase("End")) {
         float intermediatePosition = Motion::FORWARD_DISTANCE - Motion::END_DROP_DISTANCE_OFFSET;
         moveStepperToPosition(intermediatePosition, Motion::FINISH_SPEED, Motion::FORWARD_ACCEL);
-        stepper.stop();
+        if (stepper) {
+            stepper->forceStop();
+        }
         delay(Timing::MOTION_SETTLE_TIME);
 
         // Retract left clamp for end pieces

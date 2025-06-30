@@ -1,21 +1,14 @@
-#ifndef APPROACH_H
-#define APPROACH_H
+#pragma once
 
-#include <AccelStepper.h>
-#include <Arduino.h>
+#include "system_states.h"
 
 //* ************************************************************************
 //* ************************ APPROACH ***************************
 //* ************************************************************************
-// This state handles the approach sequence to position the stepper
-// at the cutting start position before beginning the cutting operation
-
-// Forward declarations
-extern AccelStepper stepper;
+// This state handles the approach sequence for the stepper motor,
+// moving to the approach position before cutting
 
 // Function declarations
 void executeApproachState();
 bool isApproachComplete();
-void resetApproachState();
-
-#endif // APPROACH_H 
+void resetApproachState(); 

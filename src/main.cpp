@@ -1,4 +1,4 @@
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Bounce2.h>
@@ -14,7 +14,8 @@
 // System state (defined in system_states.h)
 
 // Global objects
-AccelStepper stepper(AccelStepper::DRIVER, Pins::STEP, Pins::DIR);
+FastAccelStepperEngine engine = FastAccelStepperEngine();
+FastAccelStepper *stepper = NULL;
 Bounce homeSwitch = Bounce();
 Bounce startButton = Bounce();
 Bounce transferArmStartSignal = Bounce();  // Transfer arm start signal
@@ -52,6 +53,15 @@ void updateTransferArmStartSignalDebouncer();
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
+
+  // Initialize FastAccelStepper engine
+  engine.init();
+  stepper = engine.stepperConnectToPin(Pins::STEP);
+  if (stepper) {
+    stepper->setDirectionPin(Pins::DIR);
+    stepper->setEnablePin(Pins::ENABLE);
+    stepper->setAutoEnable(true);
+  }
 
   // Initialize OTA functionality
   initOTA();
@@ -138,52 +148,44 @@ void initializeHardware() {
   transferArmStartSignal.attach(Pins::TRANSFER_ARM_START_SIGNAL);
   transferArmStartSignal.interval(50);  // 50ms debounce for transfer arm start signal
 
-  // Initialize stepper
-  digitalWrite(Pins::ENABLE, HIGH);  // Disable briefly
-  delay(100);                        // Wait 1 second for motor to reset
-  digitalWrite(Pins::ENABLE, LOW);   // Enable
-  delay(50);                         // Wait for enable to take effect
-
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
+  // Initialize stepper with FastAccelStepper
+  if (stepper) {
+    stepper->setSpeedInHz(Motion::APPROACH_SPEED);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  }
 }
 
 void performHomingSequence() {
   currentState = SystemState::HOMING;
 
+  if (!stepper) return; // Safety check
+
   // Clamps are already engaged from initialization
 
   // First, move a significant distance in the negative direction to ensure
   // we're past the home switch
-  stepper.setMaxSpeed(Motion::HOMING_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(-10000);  // Move 10,000 steps in negative direction
+  stepper->setSpeedInHz(Motion::HOMING_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  stepper->move(-10000);  // Move 10,000 steps in negative direction
 
   // Use a much slower approach speed for final homing
   float slowHomingSpeed = Motion::HOMING_SPEED / 3;  // One-third of normal homing speed
 
   // Run until we hit the home switch or reach the target
-  while (stepper.distanceToGo() != 0) {
+  while (stepper->isRunning()) {
     homeSwitch.update();
 
     // If we're within 2000 steps of where we think home might be, slow down significantly
-    if (abs(stepper.currentPosition()) < 2000) {
-      stepper.setMaxSpeed(slowHomingSpeed);
+    if (abs(stepper->getCurrentPosition()) < 2000) {
+      stepper->setSpeedInHz(slowHomingSpeed);
     }
 
     if (homeSwitch.read() == HIGH) {
       // When home switch is triggered, stop immediately
-      stepper.stop();
-      
-      // Wait for the stepper to actually stop before setting position
-      while (stepper.isRunning()) {
-        stepper.run();
-      }
-      
-      stepper.setCurrentPosition(0);
+      stepper->forceStopAndNewPosition(0);
       break;
     }
-    stepper.run();
+    delay(1); // Small delay to prevent watchdog issues
   }
 
   // If we didn't hit the home switch, we have a problem
@@ -193,12 +195,12 @@ void performHomingSequence() {
   }
 
   // Now move to home offset with a gentler motion
-  stepper.setMaxSpeed(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
-  stepper.setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
-  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+  stepper->setSpeedInHz(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
+  stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
+  stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
   
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  while (stepper->isRunning()) {
+    delay(1);
   }
   
   // Add settle time after reaching home offset
@@ -236,14 +238,14 @@ void staggeredReleaseClamps() {
 void handleSerialCommand(const String &command) {
   // Check for JSON commands first
   if (command.startsWith("{")) {
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, command);
 
     if (!error) {
       const char *cmd = doc["command"];
       if (cmd && strcmp(cmd, "identify") == 0) {
         // Send board identification
-        DynamicJsonDocument response(128);
+        JsonDocument response;
         response["board_id"] = Config::BOARD_ID;
         response["description"] = Config::BOARD_DESCRIPTION;
         response["type"] = "STAGE_2";
@@ -291,7 +293,9 @@ void printSystemStatus() {
   }
 
   Serial.println("System State: " + stateStr);
-  Serial.println("Position: " + String(stepper.currentPosition() / Motion::STEPS_PER_INCH) + " inches");
+  if (stepper) {
+    Serial.println("Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
+  }
   Serial.println("Home Switch: " + String(homeSwitch.read() ? "TRIGGERED" : "NOT TRIGGERED"));
   Serial.println("Start Button: " + String(startButton.read() ? "PRESSED" : "NOT PRESSED"));
   Serial.println("Transfer Arm Start Signal: " + String(transferArmStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED"));
@@ -331,34 +335,34 @@ void printCurrentSettings() {
 void handleSerialResponse(const String &response) {
   // This function handles JSON responses from Python
   // Try to parse JSON response
-  DynamicJsonDocument doc(512);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, response);
 
   if (!error) {
     // Handle JSON responses from Python
-    if (doc.containsKey("status")) {
+    if (doc["status"].is<String>()) {
       String status = doc["status"].as<String>();
 
-      if (status == "success" && doc.containsKey("burst_complete")) {
+      if (status == "success" && doc["burst_complete"].is<String>()) {
         String result = doc["burst_complete"].as<String>();
 
         // Check for analysis results
-        if (doc.containsKey("analysis_result")) {
+        if (doc["analysis_result"].is<JsonObject>()) {
           // Extract the analysis results
           JsonObject analysis = doc["analysis_result"];
 
-          if (analysis.containsKey("class")) {
+          if (analysis["class"].is<String>()) {
             String detectedClass = analysis["class"].as<String>();
             float confidence = 0.0;
 
-            if (analysis.containsKey("confidence")) {
+            if (analysis["confidence"].is<float>()) {
               confidence = analysis["confidence"].as<float>();
             }
 
             // Update analysis result tracking
             lastDetectedClass = detectedClass;
             analysisResultReceived = true;
-          } else if (analysis.containsKey("error")) {
+          } else if (analysis["error"].is<String>()) {
             // Handle error in analysis
             String errorMsg = analysis["error"].as<String>();
 
@@ -367,7 +371,7 @@ void handleSerialResponse(const String &response) {
             analysisResultReceived = false;
           }
         }
-      } else if (status == "error" && doc.containsKey("message")) {
+      } else if (status == "error" && doc["message"].is<String>()) {
         String errorMsg = doc["message"].as<String>();
 
         // Reset analysis result tracking on error
@@ -398,11 +402,11 @@ void manualHome() {
 }
 
 void manualJog(bool jogLeft, float distance) {
-  if (currentState == SystemState::READY) {
+  if (currentState == SystemState::READY && stepper) {
     if (distance <= 0 || distance > 5.0) {  // Basic validation for jog distance
       return;
     }
-    float currentPosInches = stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
+    float currentPosInches = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
     float targetPosInches;
     if (jogLeft) {
       targetPosInches = currentPosInches - distance;
@@ -461,6 +465,8 @@ void updateTransferArmStartSignalDebouncer() {
 }
 
 void runCuttingCycle() {
+  if (!stepper) return; // Safety check
+
   // Reset analysis result tracking at the start of each cycle
   lastDetectedClass = "";
   analysisResultReceived = false;
@@ -493,30 +499,30 @@ void runCuttingCycle() {
   digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
 
   // Approach phase
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  stepper->setSpeedInHz(Motion::APPROACH_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
+  while (stepper->isRunning()) {
+    delay(1);
   }
 
   // Cutting phase
-  stepper.setMaxSpeed(Motion::CUTTING_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL * 2);
-  stepper.moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  stepper->setSpeedInHz(Motion::CUTTING_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
+  stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
+  while (stepper->isRunning()) {
+    delay(1);
   }
 
   // Finish phase
-  stepper.setMaxSpeed(Motion::FINISH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  stepper->setSpeedInHz(Motion::FINISH_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  stepper->moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
+  while (stepper->isRunning()) {
+    delay(1);
   }
 
-  stepper.stop();
+  stepper->forceStop();
   delay(50);
 
   // Release both clamps simultaneously
@@ -528,47 +534,49 @@ void runCuttingCycle() {
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
 
   // Fast return to slow-down point
-  float currentPosition = stepper.currentPosition() / (float)Motion::STEPS_PER_INCH;
+  float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
   float slowDownPosition = currentPosition * 0.01;
 
-  stepper.setMaxSpeed(Motion::RETURN_SPEED);
-  stepper.setAcceleration(Motion::RETURN_ACCEL);
-  stepper.moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
+  stepper->setSpeedInHz(Motion::RETURN_SPEED);
+  stepper->setAcceleration(Motion::RETURN_ACCEL);
+  stepper->moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
 
   unsigned long fastReturnStartTime = millis();
   unsigned long fastReturnTimeout = 15000;
 
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  while (stepper->isRunning()) {
     if (millis() - fastReturnStartTime > fastReturnTimeout) {
+      stepper->forceStop();
       break;
     }
+    delay(1);
   }
 
   // Slow approach to home position
   float slowHomingSpeed = Motion::HOMING_SPEED / 2;
-  stepper.setMaxSpeed(slowHomingSpeed);
-  stepper.setAcceleration(Motion::RETURN_ACCEL / 4);
-  stepper.moveTo(0);
+  stepper->setSpeedInHz(slowHomingSpeed);
+  stepper->setAcceleration(Motion::RETURN_ACCEL / 4);
+  stepper->moveTo(0);
 
   unsigned long slowApproachStartTime = millis();
   unsigned long slowApproachTimeout = 20000;
 
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  while (stepper->isRunning()) {
     if (millis() - slowApproachStartTime > slowApproachTimeout) {
+      stepper->forceStop();
       break;
     }
+    delay(1);
   }
 
   delay(30);
 
   // Move to home offset
-  stepper.setMaxSpeed(Motion::APPROACH_SPEED);
-  stepper.setAcceleration(Motion::FORWARD_ACCEL);
-  stepper.moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-  while (stepper.distanceToGo() != 0) {
-    stepper.run();
+  stepper->setSpeedInHz(Motion::APPROACH_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
+  while (stepper->isRunning()) {
+    delay(1);
   }
   
   // Deactivate transfer arm signal - return is complete

@@ -18,10 +18,12 @@ void executeCuttingState() {
 
 bool isCuttingComplete() {
     //! Check if cutting sequence is complete
-    return !stepper.isRunning();
+    return stepper ? !stepper->isRunning() : true;
 }
 
 void resetCuttingState() {
     //! Reset cutting state to initial conditions
-    stepper.stop();
+    if (stepper) {
+        stepper->forceStop();
+    }
 } 

@@ -1,21 +1,14 @@
-#ifndef RETURN_H
-#define RETURN_H
+#pragma once
 
-#include <AccelStepper.h>
-#include <Arduino.h>
+#include "system_states.h"
 
 //* ************************************************************************
 //* ************************ RETURN ***************************
 //* ************************************************************************
-// This state handles the return sequence to bring the stepper back
-// to the home position after completing the cutting operation
-
-// Forward declarations
-extern AccelStepper stepper;
+// This state handles the return sequence for the stepper motor,
+// moving back to the home position after cutting
 
 // Function declarations
 void executeReturnState();
 bool isReturnComplete();
-void resetReturnState();
-
-#endif // RETURN_H 
+void resetReturnState(); 

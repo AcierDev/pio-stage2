@@ -1,23 +1,14 @@
-#ifndef FINISH_H
-#define FINISH_H
+#pragma once
 
-#include <AccelStepper.h>
-#include <Arduino.h>
+#include "system_states.h"
 
 //* ************************************************************************
 //* ************************ FINISH ***************************
 //* ************************************************************************
-// This state handles the finish sequence to complete the cutting operation
-// and position the stepper at the forward position
-
-// Forward declarations
-extern AccelStepper stepper;
-extern String lastDetectedClass;
-extern bool analysisResultReceived;
+// This state handles the finish sequence for the stepper motor,
+// moving to the final forward position
 
 // Function declarations
 void executeFinishState();
 bool isFinishComplete();
-void resetFinishState();
-
-#endif // FINISH_H 
+void resetFinishState(); 
