@@ -20,10 +20,10 @@ const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward dis
 
 // Speed Settings (steps/second)
 const float HOMING_SPEED = 1000;       // 23.6 IPS with new steps/inch calculation
-const float APPROACH_SPEED = 12000;    // 283.5 IPS - reduced from 14000 to prevent issues
+const float APPROACH_SPEED = 12000;    // 283.5 IPS - back to original speed
 const float CUTTING_SPEED = 85;        // 2.0 IPS - keep slow for cutting
-const float FINISH_SPEED = 14000;      // 330.7 IPS - reduced from 17000 
-const float RETURN_SPEED = 14000;      // 330.7 IPS - reduced from 17000
+const float FINISH_SPEED = 14000;      // 330.7 IPS - back to higher speed
+const float RETURN_SPEED = 14000;      // 330.7 IPS - back to higher speed
 
 // Acceleration Settings (steps/second^2)
 const float FORWARD_ACCEL = 6000;      // Reduced from 10000 to prevent stalling

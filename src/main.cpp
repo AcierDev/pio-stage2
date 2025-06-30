@@ -501,10 +501,7 @@ void runCuttingCycle() {
   // Approach phase
   Serial.println("=== APPROACH PHASE ===");
   float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
-  float approachTarget = Motion::APPROACH_DISTANCE;
-  Serial.println("Current position: " + String(currentPos) + " inches");
-  Serial.println("Approach target: " + String(approachTarget) + " inches");
-  Serial.println("Movement distance: " + String(approachTarget - currentPos) + " inches");
+  Serial.println("Moving from " + String(currentPos) + "\" to " + String(Motion::APPROACH_DISTANCE) + "\"");
   
   stepper->setSpeedInHz(Motion::APPROACH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
@@ -517,8 +514,7 @@ void runCuttingCycle() {
   // Cutting phase
   Serial.println("=== CUTTING PHASE ===");
   float cuttingTarget = Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE;
-  Serial.println("Cutting target: " + String(cuttingTarget) + " inches");
-  Serial.println("Cutting distance: " + String(Motion::CUTTING_DISTANCE) + " inches");
+  Serial.println("Cutting " + String(Motion::CUTTING_DISTANCE) + "\" to position " + String(cuttingTarget) + "\"");
   
   stepper->setSpeedInHz(Motion::CUTTING_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);  // Removed * 2 multiplier to prevent stalling
@@ -530,9 +526,7 @@ void runCuttingCycle() {
 
   // Finish phase
   Serial.println("=== FINISH PHASE ===");
-  float finishTarget = Motion::FORWARD_DISTANCE;
-  Serial.println("Finish target: " + String(finishTarget) + " inches");
-  Serial.println("Finish distance: " + String(finishTarget - (Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE)) + " inches");
+  Serial.println("Moving to final position " + String(Motion::FORWARD_DISTANCE) + "\"");
   
   stepper->setSpeedInHz(Motion::FINISH_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
@@ -557,9 +551,7 @@ void runCuttingCycle() {
   float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
   float slowDownPosition = currentPosition * 0.05;  // Changed from 0.01 to 0.05 for more reasonable slowdown
   
-  Serial.println("Current position: " + String(currentPosition) + " inches");
-  Serial.println("Slowdown position: " + String(slowDownPosition) + " inches");
-  Serial.println("Fast return distance: " + String(currentPosition - slowDownPosition) + " inches");
+  Serial.println("Fast return from " + String(currentPosition) + "\" to " + String(slowDownPosition) + "\"");
 
   stepper->setSpeedInHz(Motion::RETURN_SPEED);
   stepper->setAcceleration(Motion::RETURN_ACCEL);
