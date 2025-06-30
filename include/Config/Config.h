@@ -11,7 +11,7 @@ extern const char *BOARD_DESCRIPTION;
 
 // Motion Parameters
 namespace Motion {
-extern const int STEPS_PER_INCH;   // Halved from 63 for the 30:80 tooth ratio
+extern const float STEPS_PER_INCH;   // 200 steps/rev ÷ (60 teeth × 2mm ÷ 25.4mm/inch) = 42.33 steps/inch
 extern const float HOME_OFFSET;  // Position value stays the same
 extern const float APPROACH_DISTANCE;  // Position value stays the same
 extern const float CUTTING_DISTANCE;   // Position value stays the same
