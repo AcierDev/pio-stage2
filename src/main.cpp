@@ -51,6 +51,10 @@ void manualToggleAlignCylinder();
 void manualStartCycle();
 void updateTransferArmStartSignalDebouncer();
 
+// Motor Movement Helper Functions
+bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acceleration, unsigned long timeoutMs);
+bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs);
+
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
 
@@ -464,6 +468,82 @@ void updateTransferArmStartSignalDebouncer() {
   }
 }
 
+//* ************************************************************************
+//* ************************ MOTOR MOVEMENT HELPERS ***************************
+//* ************************************************************************
+
+bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acceleration, unsigned long timeoutMs) {
+  //! Execute movement with progressive speed control to handle high speeds
+  if (!stepper) return false;
+  
+  float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+  float distance = abs(targetPosition - currentPos);
+  
+  // For very short distances, use direct movement
+  if (distance < 1.0) {
+    return executeControlledMovement(targetPosition, maxSpeed / 4, acceleration / 2, timeoutMs);
+  }
+  
+  // Calculate progressive speeds based on distance
+  float startSpeed = maxSpeed / 8;  // Start at 1/8 max speed
+  float midSpeed = maxSpeed / 2;    // Mid at 1/2 max speed
+  float endSpeed = maxSpeed / 4;    // End at 1/4 max speed
+  
+  // Phase 1: Start with lower speed
+  stepper->setSpeedInHz(startSpeed);
+  stepper->setAcceleration(acceleration / 4);
+  stepper->moveTo(targetPosition * Motion::STEPS_PER_INCH);
+  
+  unsigned long startTime = millis();
+  bool phaseComplete = false;
+  
+  // Monitor movement and increase speed progressively
+  while (stepper->isRunning()) {
+    if (millis() - startTime > timeoutMs) {
+      stepper->forceStop();
+      Serial.println("Progressive movement TIMEOUT!");
+      return false;
+    }
+    
+    float currentMovementPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+    float progressPercent = abs(currentMovementPos - currentPos) / distance;
+    
+    // Increase speed as we progress
+    if (progressPercent > 0.2 && progressPercent < 0.8 && !phaseComplete) {
+      stepper->setSpeedInHz(midSpeed);
+      phaseComplete = true;
+    } else if (progressPercent > 0.8) {
+      stepper->setSpeedInHz(endSpeed);
+    }
+    
+    delay(10); // Small delay for monitoring
+  }
+  
+  return true;
+}
+
+bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs) {
+  //! Execute movement with controlled speed and proper timeout handling
+  if (!stepper) return false;
+  
+  stepper->setSpeedInHz(speed);
+  stepper->setAcceleration(acceleration);
+  stepper->moveTo(targetPosition * Motion::STEPS_PER_INCH);
+  
+  unsigned long startTime = millis();
+  
+  while (stepper->isRunning()) {
+    if (millis() - startTime > timeoutMs) {
+      stepper->forceStop();
+      Serial.println("Controlled movement TIMEOUT!");
+      return false;
+    }
+    delay(1);
+  }
+  
+  return true;
+}
+
 void runCuttingCycle() {
   if (!stepper) return; // Safety check
 
@@ -471,16 +551,18 @@ void runCuttingCycle() {
   lastDetectedClass = "";
   analysisResultReceived = false;
 
+  Serial.println("=== CUTTING CYCLE START ===");
+
+  //* ************************************************************************
+  //* ************************ CLAMP SEQUENCE ***************************
+  //* ************************************************************************
+  
   // Initial left clamp pulse and alignment cylinder extension
   digitalWrite(Pins::LEFT_CLAMP, LOW);  // Engage (extend) left clamp
-
-  // Left clamp only extends for 300ms (200 ms + 100 ms delay)
   delay(200);
   digitalWrite(Pins::ALIGN_CYLINDER, HIGH);  // Extend alignment cylinder
   delay(100);
   digitalWrite(Pins::LEFT_CLAMP, HIGH);      // Retract left clamp
-
-  // Alignment cylinder stays extended for the remainder of the time
   delay(100);
 
   digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
@@ -492,115 +574,114 @@ void runCuttingCycle() {
   digitalWrite(Pins::ALIGN_CYLINDER, LOW);  // Retract alignment cylinder
   delay(125);
 
-  // Engage clamps
+  // Engage both clamps for cutting
   digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Retract right clamp
   delay(200);
   digitalWrite(Pins::LEFT_CLAMP, LOW);  // Extend left clamp
   digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Extend right clamp
 
-  // Approach phase
+  //* ************************************************************************
+  //* ************************ APPROACH PHASE ***************************
+  //* ************************************************************************
+  
   Serial.println("=== APPROACH PHASE ===");
   float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
-  Serial.println("Moving from " + String(currentPos) + "\" to " + String(Motion::APPROACH_DISTANCE) + "\"");
+  float targetPos = Motion::APPROACH_DISTANCE;
+  Serial.println("Moving from " + String(currentPos) + "\" to " + String(targetPos) + "\"");
   
-  stepper->setSpeedInHz(Motion::APPROACH_SPEED);
-  stepper->setAcceleration(Motion::FORWARD_ACCEL);
-  stepper->moveTo(Motion::APPROACH_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper->isRunning()) {
-    delay(1);
+  // Use progressive speed approach for high-speed movement
+  if (!executeProgressiveMovement(targetPos, Motion::APPROACH_SPEED, Motion::FORWARD_ACCEL, 10000)) {
+    Serial.println("APPROACH PHASE FAILED!");
+    return;
   }
-  Serial.println("Approach complete. New position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
+  
+  Serial.println("Approach complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
-  // Cutting phase
+  //* ************************************************************************
+  //* ************************ CUTTING PHASE ***************************
+  //* ************************************************************************
+  
   Serial.println("=== CUTTING PHASE ===");
   float cuttingTarget = Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE;
   Serial.println("Cutting " + String(Motion::CUTTING_DISTANCE) + "\" to position " + String(cuttingTarget) + "\"");
   
-  stepper->setSpeedInHz(Motion::CUTTING_SPEED);
-  stepper->setAcceleration(Motion::FORWARD_ACCEL);  // Removed * 2 multiplier to prevent stalling
-  stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
-  while (stepper->isRunning()) {
-    delay(1);
+  // Use slow, controlled movement for cutting
+  if (!executeControlledMovement(cuttingTarget, Motion::CUTTING_SPEED, Motion::FORWARD_ACCEL / 4, 20000)) {
+    Serial.println("CUTTING PHASE FAILED!");
+    return;
   }
-  Serial.println("Cutting complete. New position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
+  
+  Serial.println("Cutting complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
-  // Finish phase
+  //* ************************************************************************
+  //* ************************ FINISH PHASE ***************************
+  //* ************************************************************************
+  
   Serial.println("=== FINISH PHASE ===");
   Serial.println("Moving to final position " + String(Motion::FORWARD_DISTANCE) + "\"");
   
-  stepper->setSpeedInHz(Motion::FINISH_SPEED);
-  stepper->setAcceleration(Motion::FORWARD_ACCEL);
-  stepper->moveTo(Motion::FORWARD_DISTANCE * Motion::STEPS_PER_INCH);
-  while (stepper->isRunning()) {
-    delay(1);
+  // Use progressive speed for finish movement
+  if (!executeProgressiveMovement(Motion::FORWARD_DISTANCE, Motion::FINISH_SPEED, Motion::FORWARD_ACCEL, 15000)) {
+    Serial.println("FINISH PHASE FAILED!");
+    return;
   }
 
   stepper->forceStop();
   delay(50);
 
+  //* ************************************************************************
+  //* ************************ CLAMP RELEASE ***************************
+  //* ************************************************************************
+  
   // Release both clamps simultaneously
   releaseClamps();
   delay(100);
 
-  // Return phase
+  //* ************************************************************************
+  //* ************************ RETURN PHASE ***************************
+  //* ************************************************************************
+  
   Serial.println("=== RETURN PHASE ===");
   // Signal transfer arm to prevent Z-axis lowering during return
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, HIGH);
 
-  // Fast return to slow-down point
-  float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
-  float slowDownPosition = currentPosition * 0.05;  // Changed from 0.01 to 0.05 for more reasonable slowdown
+  // Fast return with progressive speed control
+  float currentPosition = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+  float slowDownPosition = currentPosition * 0.1;  // 10% of current position for slowdown
   
   Serial.println("Fast return from " + String(currentPosition) + "\" to " + String(slowDownPosition) + "\"");
 
-  stepper->setSpeedInHz(Motion::RETURN_SPEED);
-  stepper->setAcceleration(Motion::RETURN_ACCEL);
-  stepper->moveTo(slowDownPosition * Motion::STEPS_PER_INCH);
-
-  unsigned long fastReturnStartTime = millis();
-  unsigned long fastReturnTimeout = 15000;
-
-  while (stepper->isRunning()) {
-    if (millis() - fastReturnStartTime > fastReturnTimeout) {
-      stepper->forceStop();
-      Serial.println("Fast return TIMEOUT!");
-      break;
-    }
-    delay(1);
+  if (!executeProgressiveMovement(slowDownPosition, Motion::RETURN_SPEED, Motion::RETURN_ACCEL, 15000)) {
+    Serial.println("FAST RETURN FAILED!");
   }
+  
   Serial.println("Fast return complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
-  // Slow approach to home position
+  //* ************************************************************************
+  //* ************************ SLOW RETURN TO HOME ***************************
+  //* ************************************************************************
+  
   Serial.println("=== SLOW RETURN TO HOME ===");
-  float slowHomingSpeed = Motion::HOMING_SPEED / 2;
-  stepper->setSpeedInHz(slowHomingSpeed);
-  stepper->setAcceleration(Motion::RETURN_ACCEL / 4);
-  stepper->moveTo(0);
-
-  unsigned long slowApproachStartTime = millis();
-  unsigned long slowApproachTimeout = 20000;
-
-  while (stepper->isRunning()) {
-    if (millis() - slowApproachStartTime > slowApproachTimeout) {
-      stepper->forceStop();
-      Serial.println("Slow return TIMEOUT!");
-      break;
-    }
-    delay(1);
+  
+  if (!executeControlledMovement(0.0, Motion::HOMING_SPEED / 2, Motion::RETURN_ACCEL / 4, 20000)) {
+    Serial.println("SLOW RETURN FAILED!");
   }
+  
   Serial.println("Slow return complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 
   delay(30);
 
-  // Move to home offset
+  //* ************************************************************************
+  //* ************************ HOME OFFSET ***************************
+  //* ************************************************************************
+  
   Serial.println("=== MOVE TO HOME OFFSET ===");
   Serial.println("Home offset target: " + String(Motion::HOME_OFFSET) + " inches");
-  stepper->setSpeedInHz(Motion::APPROACH_SPEED);
-  stepper->setAcceleration(Motion::FORWARD_ACCEL);
-  stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-  while (stepper->isRunning()) {
-    delay(1);
+  
+  if (!executeControlledMovement(Motion::HOME_OFFSET, Motion::APPROACH_SPEED / 4, Motion::FORWARD_ACCEL / 2, 10000)) {
+    Serial.println("HOME OFFSET FAILED!");
   }
+  
   Serial.println("Home offset complete. Final position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
   
   // Deactivate transfer arm signal - return is complete
