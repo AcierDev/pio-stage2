@@ -13,7 +13,7 @@ const char *BOARD_DESCRIPTION = "Stage 2 Cutting Controller";
 namespace Motion {
 const float STEPS_PER_INCH = 42.33f;   // 200 steps/rev ÷ (60 teeth × 2mm ÷ 25.4mm/inch) = 42.33 steps/inch
 const float HOME_OFFSET = 0.9f;  // Position value stays the same
-const float APPROACH_DISTANCE = 5.0f;  // Position value stays the same
+const float APPROACH_DISTANCE = 20.0f;  // Position value stays the same
 const float CUTTING_DISTANCE = 7.3f;   // Position value stays the same
 const float FORWARD_DISTANCE = 26.8f;  // Position value stays the same
 const float END_DROP_DISTANCE_OFFSET = 5.0f;  // Distance before the forward distance
