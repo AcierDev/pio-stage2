@@ -25,6 +25,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include "config/Config.h"
 
 //* ************************************************************************
 //* ************************ OTA CONFIGURATION ***************************
@@ -60,7 +61,7 @@ void initWiFi() {
   
   //! Step 2: Connect to WiFi
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
   
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -79,11 +80,30 @@ void initWiFi() {
 //* ************************************************************************
 
 void initOTA() {
-  // Initialize WiFi first
-  initWiFi();
-  
-  //! Step 2: Configure OTA
-  ArduinoOTA.setHostname("ESP32-Remote");
+  // Configure static IP
+  IPAddress local_IP(192, 168, 1, 251);
+  IPAddress gateway(192, 168, 1, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  IPAddress primaryDNS(8, 8, 8, 8);
+  IPAddress secondaryDNS(8, 8, 4, 4);
+
+  // Try to configure static IP
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    // Static IP configuration failed
+  }
+
+  // Connect to Wi-Fi
+  WiFi.begin(Config::WIFI_SSID, Config::WIFI_PASSWORD);
+  WiFi.mode(WIFI_STA);
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+
+  // Configure OTA
+  ArduinoOTA.setHostname("ESP32-S3-Stage2");
+  ArduinoOTA.setPassword("stage2-ota");
   
   ArduinoOTA.onStart([]() {
     String type;
@@ -92,38 +112,32 @@ void initOTA() {
     } else { // U_SPIFFS
       type = "filesystem";
     }
-    Serial.println("Start updating " + type);
   });
-  
+
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
+    // OTA update completed
   });
-  
+
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    // Progress update
   });
-  
+
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
+    // Error handling
     if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
+      // Auth Failed
     } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
+      // Begin Failed
     } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
+      // Connect Failed
     } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
+      // Receive Failed
     } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
+      // End Failed
     }
   });
-  
-  //! Step 3: Start OTA service
+
   ArduinoOTA.begin();
-  Serial.println("OTA Ready");
-  Serial.println("Device ready for remote uploads!");
-  Serial.print("Use IP: ");
-  Serial.println(WiFi.localIP());
 }
 
 //* ************************************************************************
@@ -131,7 +145,6 @@ void initOTA() {
 //* ************************************************************************
 
 void handleOTA() {
-  //! Handle OTA updates
   ArduinoOTA.handle();
 }
 

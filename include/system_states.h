@@ -22,7 +22,6 @@ extern AccelStepper stepper;
 extern Bounce homeSwitch;
 extern Bounce startButton;
 extern Bounce transferArmStartSignal;
-extern Bounce cameraSignal;
 
 // System state tracking
 extern SystemState currentState;
@@ -32,12 +31,7 @@ extern bool isHomed;
 extern String lastDetectedClass;
 extern bool analysisResultReceived;
 
-// Image inference timing tracking
-extern unsigned long inferenceStartTime;
-extern bool inferenceTimingActive;
-
 // Utility function declarations
-void logMessage(const String &message, const String &level = "INFO", bool excludeSerial = false);
 void moveStepperToPosition(float position, float speed, float acceleration);
 void sendSerialMessage(const String &message);
 void handleSerialResponse(const String &response); 

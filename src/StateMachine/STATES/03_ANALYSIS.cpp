@@ -5,15 +5,11 @@
 //* ************************************************************************
 //* ************************ ANALYSIS ***************************
 //* ************************************************************************
-// This state handles the camera analysis sequence including wood detection,
-// classification, and response processing for the cutting cycle
+// This state handles basic analysis sequence initialization for the cutting cycle
 
 void executeAnalysisState() {
-    //! Execute complete analysis sequence
+    //! Execute basic analysis sequence initialization
     initializeAnalysisSequence();
-    checkCameraSignal();
-    waitForAnalysisResult();
-    validateAnalysisResult();
 }
 
 bool isAnalysisComplete() {
@@ -25,5 +21,4 @@ void resetAnalysisState() {
     //! Reset analysis state to initial conditions
     lastDetectedClass = "";
     analysisResultReceived = false;
-    inferenceTimingActive = false;
 } 

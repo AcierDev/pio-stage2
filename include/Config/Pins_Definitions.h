@@ -6,7 +6,6 @@ namespace Pins {
 extern const int HOME_SWITCH;
 extern const int START_BUTTON;
 extern const int TRANSFER_ARM_START_SIGNAL;  // Transfer arm start signal
-extern const int CAMERA_SIGNAL;             // Camera signal pin
 
 // Output pins
 extern const int STEP;
