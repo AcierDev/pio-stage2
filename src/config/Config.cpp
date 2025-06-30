@@ -11,7 +11,7 @@ const char *BOARD_DESCRIPTION = "Stage 2 Cutting Controller";
 
 // Motion Parameters
 namespace Motion {
-const int STEPS_PER_INCH = 43;   // Halved from 63 for the 30:80 tooth ratio
+const int STEPS_PER_INCH = 43;   //     
 const float HOME_OFFSET = 0.9f;  // Position value stays the same
 const float APPROACH_DISTANCE = 5.0f;  // Position value stays the same
 const float CUTTING_DISTANCE = 7.3f;   // Position value stays the same

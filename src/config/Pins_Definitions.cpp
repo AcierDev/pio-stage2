@@ -5,7 +5,7 @@
 namespace Pins {
 // Input pins
 const int HOME_SWITCH = 1;                  // Was 22 on ESP32, now using GPIO1 on S3 (ADC1_CH0)
-const int START_BUTTON = 44;                 // Was 23 on ESP32, now using GPIO44 on S3 (ADC1_CH1) 
+const int START_BUTTON = 2;                 // Was 23 on ESP32, now using GPIO44 on S3 (ADC1_CH1) 
 const int TRANSFER_ARM_START_SIGNAL = 47;  // Was 15 on ESP32, now using GPIO47 on S3 ( safe to use)
 
 // Output pins
