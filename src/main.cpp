@@ -508,7 +508,7 @@ void runCuttingCycle() {
 
   // Cutting phase
   stepper->setSpeedInHz(Motion::CUTTING_SPEED);
-  stepper->setAcceleration(Motion::FORWARD_ACCEL * 2);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);  // Removed * 2 multiplier to prevent stalling
   stepper->moveTo((Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE) * Motion::STEPS_PER_INCH);
   while (stepper->isRunning()) {
     delay(1);
@@ -535,7 +535,7 @@ void runCuttingCycle() {
 
   // Fast return to slow-down point
   float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
-  float slowDownPosition = currentPosition * 0.01;
+  float slowDownPosition = currentPosition * 0.05;  // Changed from 0.01 to 0.05 for more reasonable slowdown
 
   stepper->setSpeedInHz(Motion::RETURN_SPEED);
   stepper->setAcceleration(Motion::RETURN_ACCEL);

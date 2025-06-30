@@ -33,7 +33,7 @@ void waitForApproachComplete() {
 void moveThroughCuttingDistance() {
     //! Move through the cutting distance at slow speed
     float targetPosition = Motion::APPROACH_DISTANCE + Motion::CUTTING_DISTANCE;
-    moveStepperToPosition(targetPosition, Motion::CUTTING_SPEED, Motion::FORWARD_ACCEL * 2.0);
+    moveStepperToPosition(targetPosition, Motion::CUTTING_SPEED, Motion::FORWARD_ACCEL);  // Removed * 2.0 multiplier
 }
 
 void waitForCuttingComplete() {
@@ -49,7 +49,7 @@ void executeFastReturn() {
     //! Execute fast return to slowdown position
     if (!stepper) return;
     float currentPosition = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
-    float slowDownPosition = currentPosition * 0.01;
+    float slowDownPosition = currentPosition * 0.05;  // Changed from 0.01 to 0.05
 
     stepper->setSpeedInHz(Motion::RETURN_SPEED);
     stepper->setAcceleration(Motion::RETURN_ACCEL);
@@ -100,7 +100,7 @@ void setupCuttingParameters() {
     //! Setup parameters for cutting sequence
     if (!stepper) return;
     stepper->setSpeedInHz(Motion::CUTTING_SPEED);
-    stepper->setAcceleration(Motion::FORWARD_ACCEL * 2.0);
+    stepper->setAcceleration(Motion::FORWARD_ACCEL);  // Removed * 2.0 multiplier
 }
 
 void setupReturnParameters() {
