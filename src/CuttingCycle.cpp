@@ -1,25 +1,39 @@
 #include <FastAccelStepper.h>
 #include <Arduino.h>
 #include "system_states.h"
-#include "config/Config.h"
-#include "config/Pins_Definitions.h"
+#include "Config/Config.h"
+#include "Config/Pins_Definitions.h"
 
 //* ************************************************************************
 //* ************************ CUTTING CYCLE IMPLEMENTATION ***************************
 //* ************************************************************************
-// This module contains the complete cutting cycle implementation
-// including motor movements, clamp sequences, and all phase management
-
-// Forward declarations for helper functions
-bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acceleration, unsigned long timeoutMs);
-bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs);
-void executeClampSequence();
-void releaseClamps();
-void updateTransferArmStartSignalDebouncer();
+// Clean, simple cutting cycle implementation without analysis code
 
 //* ************************************************************************
 //* ************************ MOTOR MOVEMENT HELPERS ***************************
 //* ************************************************************************
+
+bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs) {
+  //! Execute movement with controlled speed and proper timeout handling
+  if (!stepper) return false;
+  
+  stepper->setSpeedInHz(speed);
+  stepper->setAcceleration(acceleration);
+  stepper->moveTo(targetPosition * Motion::STEPS_PER_INCH);
+  
+  unsigned long startTime = millis();
+  
+  while (stepper->isRunning()) {
+    if (millis() - startTime > timeoutMs) {
+      stepper->forceStop();
+      Serial.println("Controlled movement TIMEOUT!");
+      return false;
+    }
+    delay(1);
+  }
+  
+  return true;
+}
 
 bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acceleration, unsigned long timeoutMs) {
   //! Execute movement with progressive speed control to handle high speeds
@@ -71,28 +85,6 @@ bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acce
   return true;
 }
 
-bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs) {
-  //! Execute movement with controlled speed and proper timeout handling
-  if (!stepper) return false;
-  
-  stepper->setSpeedInHz(speed);
-  stepper->setAcceleration(acceleration);
-  stepper->moveTo(targetPosition * Motion::STEPS_PER_INCH);
-  
-  unsigned long startTime = millis();
-  
-  while (stepper->isRunning()) {
-    if (millis() - startTime > timeoutMs) {
-      stepper->forceStop();
-      Serial.println("Controlled movement TIMEOUT!");
-      return false;
-    }
-    delay(1);
-  }
-  
-  return true;
-}
-
 //* ************************************************************************
 //* ************************ CLAMP CONTROL FUNCTIONS ***************************
 //* ************************************************************************
@@ -132,7 +124,6 @@ void releaseClamps() {
 
 void updateTransferArmStartSignalDebouncer() {
   //! Force update the debouncer to capture the current state
-  // This is crucial for detecting the next signal change
   for (int i = 0; i < 5; i++) {  // Multiple updates to ensure proper state capture
     transferArmStartSignal.update();
     delay(10);
@@ -145,10 +136,6 @@ void updateTransferArmStartSignalDebouncer() {
 
 void runCuttingCycle() {
   if (!stepper) return; // Safety check
-
-  // Reset analysis result tracking at the start of each cycle
-  lastDetectedClass = "";
-  analysisResultReceived = false;
 
   Serial.println("=== CUTTING CYCLE START ===");
 

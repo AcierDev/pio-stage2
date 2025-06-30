@@ -1,17 +1,12 @@
 #pragma once
 
-#include <Arduino.h>
+#include <FastAccelStepper.h>
 
 //* ************************************************************************
-//* ************************ CUTTING CYCLE HEADER ***************************
+//* ************************ CUTTING CYCLE FUNCTIONS ***************************
 //* ************************************************************************
-// This header provides the interface for the complete cutting cycle implementation
-// including motor movements, clamp sequences, and all phase management
 
-// Main cutting cycle function
-void runCuttingCycle();
-
-// Motor movement helper functions
+// Motor movement functions
 bool executeProgressiveMovement(float targetPosition, float maxSpeed, float acceleration, unsigned long timeoutMs);
 bool executeControlledMovement(float targetPosition, float speed, float acceleration, unsigned long timeoutMs);
 
@@ -20,4 +15,7 @@ void executeClampSequence();
 void releaseClamps();
 
 // Utility functions
-void updateTransferArmStartSignalDebouncer(); 
+void updateTransferArmStartSignalDebouncer();
+
+// Main cutting cycle function
+void runCuttingCycle(); 

@@ -1,54 +1,48 @@
 #include <FastAccelStepper.h>
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <Bounce2.h>
 
 #include "system_states.h"
-#include "config/Config.h"
-#include "config/Pins_Definitions.h"
-#include "StateMachine/STATES/07_CUTTING_CYCLE.h"
-#include "StateMachine/FUNCTIONS/MotionControl.h"
-#include "StateMachine/FUNCTIONS/PneumaticControl.h"
+#include "Config/Config.h"
+#include "Config/Pins_Definitions.h"
 #include "OTA_Manager.h"
 #include "CuttingCycle.h"
 
-// System state (defined in system_states.h)
+//* ************************************************************************
+//* ************************ GLOBAL OBJECTS ***************************
+//* ************************************************************************
 
-// Global objects
+// System objects
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 FastAccelStepper *stepper = NULL;
 Bounce homeSwitch = Bounce();
 Bounce startButton = Bounce();
-Bounce transferArmStartSignal = Bounce();  // Transfer arm start signal
+Bounce transferArmStartSignal = Bounce();
 
 // System state tracking
 SystemState currentState = SystemState::INITIALIZING;
 bool isHomed = false;
 
-// Analysis result tracking
-String lastDetectedClass = "";  // Will store the last detected wood class
-bool analysisResultReceived = false;  // Flag to indicate if we've received an analysis result
+//* ************************************************************************
+//* ************************ FUNCTION DECLARATIONS ***************************
+//* ************************************************************************
 
-// Function declarations
 void initializeHardware();
 void performHomingSequence();
 void handleSerialCommand(const String &command);
 void printCurrentSettings();
-void printSystemStatus();
-void engageClamps();
-void releaseClamps();
-void staggeredReleaseClamps();
 
-void handleSerialResponse(const String &response);  // New function to handle serial responses
-void sendSerialMessage(const String &message);  // New function to send serial messages
-
-// Manual Control Functions
+// Manual control functions
 void manualHome();
 void manualJog(bool jogLeft, float distance);
 void manualToggleLeftClamp();
 void manualToggleRightClamp();
 void manualToggleAlignCylinder();
 void manualStartCycle();
+
+//* ************************************************************************
+//* ************************ SETUP ***************************
+//* ************************************************************************
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -73,6 +67,10 @@ void setup() {
   printCurrentSettings();
 }
 
+//* ************************************************************************
+//* ************************ MAIN LOOP ***************************
+//* ************************************************************************
+
 void loop() {
   // Handle OTA updates
   handleOTA();
@@ -82,14 +80,7 @@ void loop() {
     String command = Serial.readStringUntil('\n');
     command.trim();
     if (command.length() > 0) {
-      // Check if this is a JSON command from Python or a plain text command
-      if (command.startsWith("{")) {
-        // Handle JSON commands from Python (like burst responses)
-        handleSerialResponse(command);
-      } else {
-        // Handle plain text commands (manual serial commands)
-        handleSerialCommand(command);
-      }
+      handleSerialCommand(command);
     }
   }
 
@@ -101,26 +92,26 @@ void loop() {
   // Check for cycle start (either from button or machine start signal)
   if (startButton.fell() && currentState == SystemState::READY) {
     currentState = SystemState::CYCLE_RUNNING;
-
     runCuttingCycle();
-    updateTransferArmStartSignalDebouncer();
     currentState = SystemState::READY;
   }
 
   if (transferArmStartSignal.read() == HIGH && currentState == SystemState::READY) {
     currentState = SystemState::CYCLE_RUNNING;
-
     runCuttingCycle();
-    updateTransferArmStartSignalDebouncer();
     currentState = SystemState::READY;
   }
 }
+
+//* ************************************************************************
+//* ************************ HARDWARE INITIALIZATION ***************************
+//* ************************************************************************
 
 void initializeHardware() {
   // Configure input pins
   pinMode(Pins::HOME_SWITCH, INPUT_PULLDOWN);
   pinMode(Pins::START_BUTTON, INPUT_PULLDOWN);
-  pinMode(Pins::TRANSFER_ARM_START_SIGNAL, INPUT_PULLDOWN);  // Pin 15
+  pinMode(Pins::TRANSFER_ARM_START_SIGNAL, INPUT_PULLDOWN);
 
   // Configure output pins
   pinMode(Pins::ENABLE, OUTPUT);
@@ -129,14 +120,10 @@ void initializeHardware() {
   pinMode(Pins::ALIGN_CYLINDER, OUTPUT);
   pinMode(Pins::TRANSFER_ARM_SIGNAL, OUTPUT);
 
-  // Initialize clamps to engaged state (extended)
+  // Initialize pneumatics
   digitalWrite(Pins::LEFT_CLAMP, LOW);   // Start with clamps engaged
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);  // Start with clamps engaged
-
-  // Initialize alignment cylinder to retracted position
+  digitalWrite(Pins::RIGHT_CLAMP, LOW);
   digitalWrite(Pins::ALIGN_CYLINDER, LOW);
-  
-  // Initialize transfer arm signal to LOW (not returning)
   digitalWrite(Pins::TRANSFER_ARM_SIGNAL, LOW);
 
   // Setup debouncing
@@ -145,311 +132,189 @@ void initializeHardware() {
   startButton.attach(Pins::START_BUTTON);
   startButton.interval(20);
   transferArmStartSignal.attach(Pins::TRANSFER_ARM_START_SIGNAL);
-  transferArmStartSignal.interval(50);  // 50ms debounce for transfer arm start signal
+  transferArmStartSignal.interval(50);
 
-  // Initialize stepper with FastAccelStepper
+  // Initialize stepper
   if (stepper) {
     stepper->setSpeedInHz(Motion::APPROACH_SPEED);
     stepper->setAcceleration(Motion::FORWARD_ACCEL);
   }
 }
 
+//* ************************************************************************
+//* ************************ HOMING SEQUENCE ***************************
+//* ************************************************************************
+
 void performHomingSequence() {
   currentState = SystemState::HOMING;
+  if (!stepper) return;
 
-  if (!stepper) return; // Safety check
+  Serial.println("=== HOMING SEQUENCE START ===");
 
-  // Clamps are already engaged from initialization
-
-  // First, move a significant distance in the negative direction to ensure
-  // we're past the home switch
+  // Move away from home switch first
   stepper->setSpeedInHz(Motion::HOMING_SPEED);
   stepper->setAcceleration(Motion::FORWARD_ACCEL);
-  stepper->move(-10000);  // Move 10,000 steps in negative direction
+  stepper->move(-10000);  // Move away from home
 
-  // Use a much slower approach speed for final homing
-  float slowHomingSpeed = Motion::HOMING_SPEED / 3;  // One-third of normal homing speed
+  // Slow down as we approach home
+  float slowHomingSpeed = Motion::HOMING_SPEED / 3;
 
-  // Run until we hit the home switch or reach the target
   while (stepper->isRunning()) {
     homeSwitch.update();
 
-    // If we're within 2000 steps of where we think home might be, slow down significantly
+    // Slow down when getting close to home
     if (abs(stepper->getCurrentPosition()) < 2000) {
       stepper->setSpeedInHz(slowHomingSpeed);
     }
 
     if (homeSwitch.read() == HIGH) {
-      // When home switch is triggered, stop immediately
       stepper->forceStopAndNewPosition(0);
       break;
     }
-    delay(1); // Small delay to prevent watchdog issues
+    delay(1);
   }
 
-  // If we didn't hit the home switch, we have a problem
+  // Check if homing was successful
   if (homeSwitch.read() == LOW) {
+    Serial.println("HOMING FAILED!");
     currentState = SystemState::ERROR;
     return;
   }
 
-  // Now move to home offset with a gentler motion
-  stepper->setSpeedInHz(Motion::HOMING_SPEED / 2);  // Half speed for moving to offset
-  stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);  // Gentler acceleration
+  // Move to home offset
+  stepper->setSpeedInHz(Motion::HOMING_SPEED / 2);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL / 2);
   stepper->moveTo(Motion::HOME_OFFSET * Motion::STEPS_PER_INCH);
-  
+
   while (stepper->isRunning()) {
     delay(1);
   }
-  
-  // Add settle time after reaching home offset
-  delay(Timing::HOME_SETTLE_TIME);
-
-  // Now that we're at home position, release the clamps
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);
-  
-  // Add settle time after releasing clamps
-  delay(Timing::CLAMP_RELEASE_TIME);
 
   isHomed = true;
+  Serial.println("=== HOMING COMPLETE ===");
+  Serial.println("Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 }
 
-void engageClamps() {
-  digitalWrite(Pins::LEFT_CLAMP, LOW);
-  digitalWrite(Pins::RIGHT_CLAMP, LOW);
-  delay(200);
-}
-
-void releaseClamps() {
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);
-  delay(200);
-}
-
-void staggeredReleaseClamps() {
-  digitalWrite(Pins::RIGHT_CLAMP, HIGH);  // Release right clamp first
-  delay(200);
-  digitalWrite(Pins::LEFT_CLAMP, HIGH);  // Release left clamp
-  delay(200);
-}
+//* ************************************************************************
+//* ************************ SERIAL COMMAND HANDLING ***************************
+//* ************************************************************************
 
 void handleSerialCommand(const String &command) {
-  // Check for JSON commands first
-  if (command.startsWith("{")) {
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, command);
-
-    if (!error) {
-      const char *cmd = doc["command"];
-      if (cmd && strcmp(cmd, "identify") == 0) {
-        // Send board identification
-        JsonDocument response;
-        response["board_id"] = Config::BOARD_ID;
-        response["description"] = Config::BOARD_DESCRIPTION;
-        response["type"] = "STAGE_2";
-
-        String jsonResponse;
-        serializeJson(response, jsonResponse);
-        sendSerialMessage(jsonResponse);
-        return;
+  if (command.equalsIgnoreCase("home")) {
+    manualHome();
+  } else if (command.startsWith("jog")) {
+    // Parse jog command: "jog left 1.5" or "jog right 2.0"
+    int firstSpace = command.indexOf(' ');
+    int secondSpace = command.indexOf(' ', firstSpace + 1);
+    
+    if (firstSpace > 0 && secondSpace > 0) {
+      String direction = command.substring(firstSpace + 1, secondSpace);
+      float distance = command.substring(secondSpace + 1).toFloat();
+      
+      if (direction.equalsIgnoreCase("left")) {
+        manualJog(true, distance);
+      } else if (direction.equalsIgnoreCase("right")) {
+        manualJog(false, distance);
       }
     }
-  }
-
-  // Handle plain text commands
-  if (command == "status") {
-    printSystemStatus();
-  } else if (command == "home") {
-    performHomingSequence();
-  } else if (command == "settings") {
+  } else if (command.equalsIgnoreCase("leftclamp")) {
+    manualToggleLeftClamp();
+  } else if (command.equalsIgnoreCase("rightclamp")) {
+    manualToggleRightClamp();
+  } else if (command.equalsIgnoreCase("align")) {
+    manualToggleAlignCylinder();
+  } else if (command.equalsIgnoreCase("cycle")) {
+    manualStartCycle();
+  } else if (command.equalsIgnoreCase("status")) {
     printCurrentSettings();
-  } else if (command == "identify") {
-    // Plain text identification response
-    sendSerialMessage("BOARD_ID:" + String(Config::BOARD_ID));
+  } else {
+    Serial.println("Unknown command: " + command);
+    Serial.println("Available commands: home, jog [left/right] [distance], leftclamp, rightclamp, align, cycle, status");
   }
-}
-
-void printSystemStatus() {
-  // Print state
-  String stateStr = "UNKNOWN";
-  switch (currentState) {
-    case SystemState::INITIALIZING:
-      stateStr = "INITIALIZING";
-      break;
-    case SystemState::HOMING:
-      stateStr = "HOMING";
-      break;
-    case SystemState::READY:
-      stateStr = "READY";
-      break;
-    case SystemState::CYCLE_RUNNING:
-      stateStr = "CYCLE RUNNING";
-      break;
-    case SystemState::ERROR:
-      stateStr = "ERROR";
-      break;
-  }
-
-  Serial.println("System State: " + stateStr);
-  if (stepper) {
-    Serial.println("Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
-  }
-  Serial.println("Home Switch: " + String(homeSwitch.read() ? "TRIGGERED" : "NOT TRIGGERED"));
-  Serial.println("Start Button: " + String(startButton.read() ? "PRESSED" : "NOT PRESSED"));
-  Serial.println("Transfer Arm Start Signal: " + String(transferArmStartSignal.read() ? "TRIGGERED" : "NOT TRIGGERED"));
-  Serial.println("Left Clamp: " + String(digitalRead(Pins::LEFT_CLAMP) ? "RELEASED" : "ENGAGED"));
-  Serial.println("Right Clamp: " + String(digitalRead(Pins::RIGHT_CLAMP) ? "RELEASED" : "ENGAGED"));
-  Serial.println("Alignment Cylinder: " + String(digitalRead(Pins::ALIGN_CYLINDER) ? "EXTENDED" : "RETRACTED"));
-  Serial.println("Transfer Arm Signal: " + String(digitalRead(Pins::TRANSFER_ARM_SIGNAL) ? "ACTIVE (Z-BLOCKED)" : "INACTIVE"));
 }
 
 void printCurrentSettings() {
-  Serial.println("\nMotion Parameters:");
-  Serial.println("- Steps per inch: " + String(Motion::STEPS_PER_INCH));
-  Serial.println("- Home offset: " + String(Motion::HOME_OFFSET));
-  Serial.println("- Approach distance: " + String(Motion::APPROACH_DISTANCE));
-  Serial.println("- Cutting distance: " + String(Motion::CUTTING_DISTANCE));
-  Serial.println("- Forward distance: " + String(Motion::FORWARD_DISTANCE));
-
-  Serial.println("\nSpeed Settings (steps/sec):");
-  Serial.println("- Homing: " + String(Motion::HOMING_SPEED));
-  Serial.println("- Approach: " + String(Motion::APPROACH_SPEED));
-  Serial.println("- Cutting: " + String(Motion::CUTTING_SPEED));
-  Serial.println("- Finish: " + String(Motion::FINISH_SPEED));
-  Serial.println("- Return: " + String(Motion::RETURN_SPEED));
-
-  Serial.println("\nAcceleration Settings (steps/sec²):");
-  Serial.println("- Forward: " + String(Motion::FORWARD_ACCEL));
-  Serial.println("- Return: " + String(Motion::RETURN_ACCEL));
-
-  Serial.println("\nTiming Settings (ms):");
-  Serial.println("- Clamp engage time: " + String(Timing::CLAMP_ENGAGE_TIME));
-  Serial.println("- Clamp release time: " + String(Timing::CLAMP_RELEASE_TIME));
-  Serial.println("- Home settle time: " + String(Timing::HOME_SETTLE_TIME));
-  Serial.println("- Motion settle time: " + String(Timing::MOTION_SETTLE_TIME));
-}
-
-// Function to handle serial responses
-void handleSerialResponse(const String &response) {
-  // This function handles JSON responses from Python
-  // Try to parse JSON response
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, response);
-
-  if (!error) {
-    // Handle JSON responses from Python
-    if (doc["status"].is<String>()) {
-      String status = doc["status"].as<String>();
-
-      if (status == "success" && doc["burst_complete"].is<String>()) {
-        String result = doc["burst_complete"].as<String>();
-
-        // Check for analysis results
-        if (doc["analysis_result"].is<JsonObject>()) {
-          // Extract the analysis results
-          JsonObject analysis = doc["analysis_result"];
-
-          if (analysis["class"].is<String>()) {
-            String detectedClass = analysis["class"].as<String>();
-            float confidence = 0.0;
-
-            if (analysis["confidence"].is<float>()) {
-              confidence = analysis["confidence"].as<float>();
-            }
-
-            // Update analysis result tracking
-            lastDetectedClass = detectedClass;
-            analysisResultReceived = true;
-          } else if (analysis["error"].is<String>()) {
-            // Handle error in analysis
-            String errorMsg = analysis["error"].as<String>();
-
-            // Reset analysis result tracking on error
-            lastDetectedClass = "";
-            analysisResultReceived = false;
-          }
-        }
-      } else if (status == "error" && doc["message"].is<String>()) {
-        String errorMsg = doc["message"].as<String>();
-
-        // Reset analysis result tracking on error
-        lastDetectedClass = "";
-        analysisResultReceived = false;
-      }
-    }
-  } else {
-    // Reset analysis result tracking on error
-    lastDetectedClass = "";
-    analysisResultReceived = false;
+  Serial.println("\n=== SYSTEM STATUS ===");
+  Serial.println("State: " + String(static_cast<int>(currentState)));
+  Serial.println("Homed: " + String(isHomed ? "YES" : "NO"));
+  
+  if (stepper) {
+    float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+    Serial.println("Position: " + String(currentPos) + " inches");
+    Serial.println("Speed: " + String(stepper->getCurrentSpeedInUs()) + " us/step");
   }
+  
+  Serial.println("Home Switch: " + String(homeSwitch.read() ? "ACTIVE" : "INACTIVE"));
+  Serial.println("Start Button: " + String(startButton.read() ? "PRESSED" : "RELEASED"));
+  Serial.println("Transfer Arm Signal: " + String(transferArmStartSignal.read() ? "ACTIVE" : "INACTIVE"));
+  Serial.println("===================\n");
 }
 
-// Function to send serial messages
-void sendSerialMessage(const String &message) {
-  Serial.println(message);
-}
+//* ************************************************************************
+//* ************************ MANUAL CONTROL FUNCTIONS ***************************
+//* ************************************************************************
 
-// Manual Control Function Implementations
 void manualHome() {
-  if (currentState == SystemState::READY) {
-    performHomingSequence();
-    if (isHomed) {
-      currentState = SystemState::READY;  // Should be set by performHomingSequence if successful
-    }
+  if (currentState != SystemState::READY) {
+    Serial.println("Cannot home - system not ready");
+    return;
   }
+  performHomingSequence();
+  currentState = SystemState::READY;
 }
 
 void manualJog(bool jogLeft, float distance) {
-  if (currentState == SystemState::READY && stepper) {
-    if (distance <= 0 || distance > 5.0) {  // Basic validation for jog distance
-      return;
-    }
-    float currentPosInches = stepper->getCurrentPosition() / (float)Motion::STEPS_PER_INCH;
-    float targetPosInches;
-    if (jogLeft) {
-      targetPosInches = currentPosInches - distance;
-      // Prevent jogging beyond a safe minimum (e.g., slightly before 0)
-      if (targetPosInches < -0.1) targetPosInches = -0.1;
-    } else {
-      targetPosInches = currentPosInches + distance;
-      // Prevent jogging beyond a safe maximum
-      if (targetPosInches > (Motion::FORWARD_DISTANCE + 10.0))
-        targetPosInches = Motion::FORWARD_DISTANCE + 10.0;
-    }
-
-    // Use a moderate speed and acceleration for jogging
-    moveStepperToPosition(targetPosInches, Motion::APPROACH_SPEED / 2, Motion::FORWARD_ACCEL / 2);
+  if (!stepper || currentState != SystemState::READY) {
+    Serial.println("Cannot jog - stepper not available or system not ready");
+    return;
   }
+
+  float currentPos = stepper->getCurrentPosition() / Motion::STEPS_PER_INCH;
+  float targetPos = jogLeft ? currentPos - distance : currentPos + distance;
+  
+  Serial.println("Jogging " + String(jogLeft ? "left" : "right") + " " + String(distance) + " inches");
+  Serial.println("From " + String(currentPos) + " to " + String(targetPos));
+
+  stepper->setSpeedInHz(Motion::HOMING_SPEED);
+  stepper->setAcceleration(Motion::FORWARD_ACCEL);
+  stepper->moveTo(targetPos * Motion::STEPS_PER_INCH);
+
+  while (stepper->isRunning()) {
+    delay(1);
+  }
+
+  Serial.println("Jog complete. Position: " + String(stepper->getCurrentPosition() / Motion::STEPS_PER_INCH) + " inches");
 }
 
 void manualToggleLeftClamp() {
-  if (currentState == SystemState::READY) {
-    bool currentLeftClampState = digitalRead(Pins::LEFT_CLAMP);  // HIGH = RELEASED, LOW = ENGAGED
-    digitalWrite(Pins::LEFT_CLAMP, !currentLeftClampState);
-  }
+  static bool leftClampEngaged = true;
+  leftClampEngaged = !leftClampEngaged;
+  digitalWrite(Pins::LEFT_CLAMP, leftClampEngaged ? LOW : HIGH);
+  Serial.println("Left clamp: " + String(leftClampEngaged ? "ENGAGED" : "RELEASED"));
 }
 
 void manualToggleRightClamp() {
-  if (currentState == SystemState::READY) {
-    bool currentRightClampState = digitalRead(Pins::RIGHT_CLAMP);  // HIGH = RELEASED, LOW = ENGAGED
-    digitalWrite(Pins::RIGHT_CLAMP, !currentRightClampState);
-  }
+  static bool rightClampEngaged = true;
+  rightClampEngaged = !rightClampEngaged;
+  digitalWrite(Pins::RIGHT_CLAMP, rightClampEngaged ? LOW : HIGH);
+  Serial.println("Right clamp: " + String(rightClampEngaged ? "ENGAGED" : "RELEASED"));
 }
 
 void manualToggleAlignCylinder() {
-  if (currentState == SystemState::READY) {
-    bool currentAlignmentCylinderState = digitalRead(Pins::ALIGN_CYLINDER);  // HIGH = EXTENDED, LOW = RETRACTED
-    digitalWrite(Pins::ALIGN_CYLINDER, !currentAlignmentCylinderState);
-  }
+  static bool alignExtended = false;
+  alignExtended = !alignExtended;
+  digitalWrite(Pins::ALIGN_CYLINDER, alignExtended ? HIGH : LOW);
+  Serial.println("Alignment cylinder: " + String(alignExtended ? "EXTENDED" : "RETRACTED"));
 }
 
 void manualStartCycle() {
-  if (currentState == SystemState::READY) {
-    currentState = SystemState::CYCLE_RUNNING;
-
-    runCuttingCycle();
-    updateTransferArmStartSignalDebouncer();
-    currentState = SystemState::READY;
+  if (currentState != SystemState::READY) {
+    Serial.println("Cannot start cycle - system not ready");
+    return;
   }
+  
+  Serial.println("Starting manual cutting cycle...");
+  currentState = SystemState::CYCLE_RUNNING;
+  runCuttingCycle();
+  currentState = SystemState::READY;
 }
